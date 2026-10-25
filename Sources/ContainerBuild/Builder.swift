@@ -1,5 +1,5 @@
 //===----------------------------------------------------------------------===//
-// Copyright © 2025 Apple Inc. and the container project authors. All rights reserved.
+// Copyright © 2025-2026 Apple Inc. and the container project authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,61 +14,96 @@
 // limitations under the License.
 //===----------------------------------------------------------------------===//
 
-import ContainerClient
+import ContainerAPIClient
+import ContainerPersistence
 import Containerization
 import ContainerizationOCI
 import ContainerizationOS
 import Foundation
-import GRPC
+import GRPCCore
+import GRPCNIOTransportHTTP2
+import Logging
 import NIO
-import NIOHPACK
-import NIOHTTP2
+import NIOPosix
 
 public struct Builder: Sendable {
-    let client: BuilderClientProtocol
-    let clientAsync: BuilderClientAsyncProtocol
-    let group: EventLoopGroup
-    let builderShimSocket: FileHandle
-    let channel: GRPCChannel
+    public static let builderContainerId = "buildkit"
 
-    public init(socket: FileHandle, group: EventLoopGroup) throws {
-        try socket.setSendBufSize(4 << 20)
-        try socket.setRecvBufSize(2 << 20)
-        var config = ClientConnection.Configuration.default(
-            target: .connectedSocket(socket.fileDescriptor),
-            eventLoopGroup: group
-        )
-        config.connectionIdleTimeout = TimeAmount(.seconds(600))
-        config.connectionKeepalive = .init(
-            interval: TimeAmount(.seconds(600)),
-            timeout: TimeAmount(.seconds(500)),
-            permitWithoutCalls: true
-        )
-        config.connectionBackoff = .init(
-            initialBackoff: TimeInterval(1),
-            maximumBackoff: TimeInterval(10)
-        )
-        config.callStartBehavior = .fastFailure
-        config.httpMaxFrameSize = 8 << 10
-        config.maximumReceiveMessageLength = 512 << 20
-        config.httpTargetWindowSize = 16 << 10
+    /// The `:authority` sent with every request to the builder shim.
+    ///
+    /// The shim connection is an already-connected socket, so grpc-swift has no target
+    /// address to derive an authority from and would send none. gRPC-Go v1.82.2, v1.83.2
+    /// and v1.84.0 or later reject requests without an `:authority` (grpc-go #9365), which
+    /// leaves the builder unable to answer even the `Info` probe. The shim does not route
+    /// on the authority, so any valid host name works.
+    static let grpcAuthority = Builder.builderContainerId
 
-        let channel = ClientConnection(configuration: config)
-        self.channel = channel
-        self.clientAsync = BuilderClientAsync(channel: channel)
-        self.client = BuilderClient(channel: channel)
-        self.group = group
-        self.builderShimSocket = socket
+    /// The transport configuration for the connection to the builder shim.
+    static func transportConfig() -> HTTP2ClientTransport.WrappedChannel.Config {
+        var config = HTTP2ClientTransport.WrappedChannel.Config.defaults
+        config.http2.authority = grpcAuthority
+        return config
     }
 
-    public func info() throws -> InfoResponse {
-        let resp = self.client.info(InfoRequest(), callOptions: CallOptions())
-        return try resp.response.wait()
+    let client: Com_Apple_Container_Build_V1_Builder.Client<HTTP2ClientTransport.WrappedChannel>
+    let grpcClient: GRPCClient<HTTP2ClientTransport.WrappedChannel>
+    let group: EventLoopGroup
+    let builderShimSocket: FileHandle
+    let clientTask: Task<Void, any Swift.Error>
+    let logger: Logger
+
+    public init(socket: FileHandle, group: EventLoopGroup, logger: Logger) async throws {
+        try socket.setSendBufSize(4 << 20)
+        try socket.setRecvBufSize(2 << 20)
+
+        let transport = try await HTTP2ClientTransport.WrappedChannel.wrapping(
+            config: Builder.transportConfig(),
+            serviceConfig: .init()
+        ) { configure in
+            try await withCheckedThrowingContinuation { continuation in
+                ClientBootstrap(group: group)
+                    .channelInitializer { channel in
+                        configure(channel).map { configured in
+                            continuation.resume(returning: configured)
+                        }
+                    }
+                    .withConnectedSocket(socket.fileDescriptor)
+                    .whenFailure { error in
+                        continuation.resume(throwing: error)
+                    }
+            }
+        }
+
+        let grpcClient = GRPCClient(transport: transport)
+        self.grpcClient = grpcClient
+        self.client = Com_Apple_Container_Build_V1_Builder.Client(wrapping: grpcClient)
+        self.group = group
+        self.builderShimSocket = socket
+        self.logger = logger
+
+        // Start the client connection loop in a background task
+        self.clientTask = Task {
+            do {
+                try await grpcClient.runConnections()
+            } catch is CancellationError {
+                // Expected during graceful shutdown - re-throw
+                throw CancellationError()
+            } catch let error as RPCError where error.code == .unavailable {
+                // Connection closed - this is expected when the container stops
+                logger.debug("gRPC connection closed: \(error)")
+                throw error
+            } catch {
+                // Log unexpected connection errors
+                logger.error("gRPC client connection error: \(error)")
+                throw error
+            }
+        }
     }
 
     public func info() async throws -> InfoResponse {
-        let opts = CallOptions(timeLimit: .timeout(.seconds(30)))
-        return try await self.clientAsync.info(InfoRequest(), callOptions: opts)
+        var opts = CallOptions.defaults
+        opts.timeout = .seconds(30)
+        return try await self.client.info(InfoRequest(), options: opts)
     }
 
     // TODO
@@ -89,7 +124,7 @@ public struct Builder: Sendable {
         }
 
         if let terminal = config.terminal {
-            Task {
+            _ = Task {
                 let winchHandler = AsyncSignalHandler.create(notify: [SIGWINCH])
                 let setWinch = { (rows: UInt16, cols: UInt16) in
                     var winch = ClientStream()
@@ -117,12 +152,23 @@ public struct Builder: Sendable {
             }
         }
 
-        let respStream = self.clientAsync.performBuild(reqStream, callOptions: try CallOptions(config))
         let pipeline = try await BuildPipeline(config)
         do {
-            try await pipeline.run(sender: continuation, receiver: respStream)
+            try await self.client.performBuild(
+                metadata: try Self.buildMetadata(config),
+                options: .defaults,
+                requestProducer: { writer in
+                    for await message in reqStream {
+                        try await writer.write(message)
+                    }
+                },
+                onResponse: { response in
+                    try await pipeline.run(sender: continuation, receiver: response.messages)
+                }
+            )
         } catch Error.buildComplete {
-            _ = channel.close()
+            self.grpcClient.beginGracefulShutdown()
+            self.clientTask.cancel()
             try await group.shutdownGracefully()
             return
         }
@@ -237,52 +283,112 @@ public struct Builder: Sendable {
         public let buildID: String
         public let contentStore: ContentStore
         public let buildArgs: [String]
+        public let secrets: [String: Data]
+        public let ssh: String
         public let contextDir: String
         public let dockerfile: Data
+        public let dockerignore: Data?
         public let labels: [String]
         public let noCache: Bool
         public let platforms: [Platform]
         public let terminal: Terminal?
-        public let tag: String
+        public let tags: [String]
         public let target: String
         public let quiet: Bool
         public let exports: [BuildExport]
         public let cacheIn: [String]
         public let cacheOut: [String]
+        public let pull: Bool
+        public let containerSystemConfig: ContainerSystemConfig
 
         public init(
             buildID: String,
             contentStore: ContentStore,
             buildArgs: [String],
+            secrets: [String: Data],
+            ssh: String,
             contextDir: String,
             dockerfile: Data,
+            dockerignore: Data?,
             labels: [String],
             noCache: Bool,
             platforms: [Platform],
             terminal: Terminal?,
-            tag: String,
+            tags: [String],
             target: String,
             quiet: Bool,
             exports: [BuildExport],
             cacheIn: [String],
             cacheOut: [String],
+            pull: Bool,
+            containerSystemConfig: ContainerSystemConfig
         ) {
             self.buildID = buildID
             self.contentStore = contentStore
             self.buildArgs = buildArgs
+            self.secrets = secrets
+            self.ssh = ssh
             self.contextDir = contextDir
             self.dockerfile = dockerfile
+            self.dockerignore = dockerignore
             self.labels = labels
             self.noCache = noCache
             self.platforms = platforms
             self.terminal = terminal
-            self.tag = tag
+            self.tags = tags
             self.target = target
             self.quiet = quiet
             self.exports = exports
             self.cacheIn = cacheIn
             self.cacheOut = cacheOut
+            self.pull = pull
+            self.containerSystemConfig = containerSystemConfig
         }
+    }
+
+    static func buildMetadata(_ config: BuildConfig) throws -> Metadata {
+        var metadata = Metadata()
+        metadata.addString(config.buildID, forKey: "build-id")
+        metadata.addString(URL(filePath: config.contextDir).path(percentEncoded: false), forKey: "context")
+        metadata.addString(config.dockerfile.base64EncodedString(), forKey: "dockerfile")
+        metadata.addString(config.terminal != nil ? "tty" : "plain", forKey: "progress")
+        metadata.addString(config.target, forKey: "target")
+
+        if let dockerignore = config.dockerignore {
+            metadata.addString(dockerignore.base64EncodedString(), forKey: "dockerignore")
+        }
+        for tag in config.tags {
+            metadata.addString(tag, forKey: "tag")
+        }
+        for platform in config.platforms {
+            metadata.addString(platform.description, forKey: "platforms")
+        }
+        if config.noCache {
+            metadata.addString("", forKey: "no-cache")
+        }
+        for label in config.labels {
+            metadata.addString(label, forKey: "labels")
+        }
+        for buildArg in config.buildArgs {
+            metadata.addString(buildArg, forKey: "build-args")
+        }
+        for (id, data) in config.secrets {
+            metadata.addString(id + "=" + data.base64EncodedString(), forKey: "secrets")
+        }
+        if config.ssh == "default" {
+            metadata.addString("default", forKey: "ssh")
+        }
+        for output in config.exports {
+            metadata.addString(try output.stringValue, forKey: "outputs")
+        }
+        for cacheIn in config.cacheIn {
+            metadata.addString(cacheIn, forKey: "cache-in")
+        }
+        for cacheOut in config.cacheOut {
+            metadata.addString(cacheOut, forKey: "cache-out")
+        }
+
+        return metadata
     }
 }
 
@@ -302,44 +408,6 @@ extension Builder {
                 return "export entry \(exp) is invalid: \(reason)"
             }
         }
-    }
-}
-
-extension CallOptions {
-    public init(_ config: Builder.BuildConfig) throws {
-        var headers: [(String, String)] = [
-            ("build-id", config.buildID),
-            ("context", URL(filePath: config.contextDir).path(percentEncoded: false)),
-            ("dockerfile", config.dockerfile.base64EncodedString()),
-            ("progress", config.terminal != nil ? "tty" : "plain"),
-            ("tag", config.tag),
-            ("target", config.target),
-        ]
-        for platform in config.platforms {
-            headers.append(("platforms", platform.description))
-        }
-        if config.noCache {
-            headers.append(("no-cache", ""))
-        }
-        for label in config.labels {
-            headers.append(("labels", label))
-        }
-        for buildArg in config.buildArgs {
-            headers.append(("build-args", buildArg))
-        }
-        for output in config.exports {
-            headers.append(("outputs", try output.stringValue))
-        }
-        for cacheIn in config.cacheIn {
-            headers.append(("cache-in", cacheIn))
-        }
-        for cacheOut in config.cacheOut {
-            headers.append(("cache-out", cacheOut))
-        }
-
-        self.init(
-            customMetadata: HPACKHeaders(headers)
-        )
     }
 }
 

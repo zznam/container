@@ -1,5 +1,5 @@
 //===----------------------------------------------------------------------===//
-// Copyright © 2025 Apple Inc. and the container project authors. All rights reserved.
+// Copyright © 2025-2026 Apple Inc. and the container project authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,13 +14,18 @@
 // limitations under the License.
 //===----------------------------------------------------------------------===//
 
-import ContainerClient
+import ContainerAPIClient
 import Containerization
 import ContainerizationArchive
 import ContainerizationOCI
 import Foundation
-import GRPC
+import GRPCCore
 
+/// Handles the `content-store` stage of the build protocol.
+///
+/// Proxies image-layer blob requests from BuildKit to the host's local
+/// containerd content store. BuildKit issues these requests when it needs
+/// base-image layers that are not already present in the builder VM.
 struct BuildRemoteContentProxy: BuildPipelineHandler {
     let local: ContentStore
 

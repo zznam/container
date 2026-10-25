@@ -1,5 +1,5 @@
 //===----------------------------------------------------------------------===//
-// Copyright © 2025 Apple Inc. and the container project authors. All rights reserved.
+// Copyright © 2025-2026 Apple Inc. and the container project authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,17 +21,20 @@ import ContainerXPC
 public enum ImagesServiceXPCRoute: String {
     case imageList
     case imagePull
+    case imagePlatforms
     case imagePush
     case imageTag
     case imageBuild
     case imageDelete
     case imageSave
     case imageLoad
-    case imagePrune
+    case imageCleanupOrphanedBlobs
+    case imageDiskUsage
 
     case contentGet
     case contentDelete
     case contentClean
+    case contentSize
     case contentIngestStart
     case contentIngestComplete
     case contentIngestCancel

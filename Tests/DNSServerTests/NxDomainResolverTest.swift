@@ -1,5 +1,5 @@
 //===----------------------------------------------------------------------===//
-// Copyright © 2025 Apple Inc. and the container project authors. All rights reserved.
+// Copyright © 2025-2026 Apple Inc. and the container project authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,9 +14,6 @@
 // limitations under the License.
 //===----------------------------------------------------------------------===//
 
-//
-
-import DNS
 import Testing
 
 @testable import DNSServer
@@ -29,7 +26,7 @@ struct NxDomainResolverTest {
             id: UInt16(1),
             type: .query,
             questions: [
-                Question(name: "foo", type: .host6)
+                Question(name: "foo.", type: .host6)
             ])
 
         let response = try await handler.answer(query: query)
@@ -48,7 +45,7 @@ struct NxDomainResolverTest {
             id: UInt16(1),
             type: .query,
             questions: [
-                Question(name: "bar", type: .host)
+                Question(name: "bar.", type: .host)
             ])
 
         let response = try await handler.answer(query: query)

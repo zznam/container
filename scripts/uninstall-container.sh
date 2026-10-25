@@ -1,5 +1,5 @@
 #!/bin/bash 
-# Copyright © 2025 Apple Inc. and the container project authors. All rights reserved.
+# Copyright © 2025-2026 Apple Inc. and the container project authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -49,6 +49,7 @@ done
 
 if [ $OPTS != 1 ]; then 
     echo "Invalid number of options. Must provide either -d OR -k"
+    usage
     exit 1
 fi
 
@@ -57,6 +58,10 @@ CONTAINER_RUNNING=$(launchctl list | grep -e 'com\.apple\.container\W')
 if [ -n "$CONTAINER_RUNNING" ]; then
     echo '`container` is still running. Please ensure the service is stopped by running `container system stop`'
     exit 1
+fi
+
+if [ "$EUID" -ne 0 ]; then
+    echo "This script requires an administrator password to remove the application files from system directories."
 fi
 
 FILES=$(pkgutil --only-files --files com.apple.container-installer)
@@ -80,4 +85,6 @@ echo 'Removed `container` tool and helpers'
 if [ "$DELETE_DATA" = true ]; then
     echo 'Removing `container` user data'
     sudo rm -rf ~/Library/Application\ Support/com.apple.container
+    echo 'Removing `container` user defaults'
+    defaults delete com.apple.container.defaults > /dev/null 2>&1 || true
 fi

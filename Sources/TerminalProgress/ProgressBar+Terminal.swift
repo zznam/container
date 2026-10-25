@@ -1,5 +1,5 @@
 //===----------------------------------------------------------------------===//
-// Copyright © 2025 Apple Inc. and the container project authors. All rights reserved.
+// Copyright © 2025-2026 Apple Inc. and the container project authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,10 +21,24 @@ enum EscapeSequence {
     static let hideCursor = "\u{001B}[?25l"
     static let showCursor = "\u{001B}[?25h"
     static let moveUp = "\u{001B}[1A"
+    static let clearToEndOfLine = "\u{001B}[K"
+
+    // Color codes
+    static let reset = "\u{001B}[0m"
+    static let bold = "\u{001B}[1m"
+    static let dim = "\u{001B}[2m"
+    static let green = "\u{001B}[32m"
+    static let yellow = "\u{001B}[33m"
+    static let cyan = "\u{001B}[36m"
+
+    /// Wraps text in an ANSI color code with a reset suffix.
+    static func colored(_ text: String, _ code: String) -> String {
+        "\(code)\(text)\(reset)"
+    }
 }
 
 extension ProgressBar {
-    private var terminalWidth: Int {
+    var termWidth: Int {
         guard
             let terminalHandle = term,
             let terminal = try? Terminal(descriptor: terminalHandle.fileDescriptor)
@@ -32,19 +46,32 @@ extension ProgressBar {
             return 0
         }
 
-        let terminalWidth = (try? Int(terminal.size.width)) ?? 0
-        return terminalWidth
+        return (try? Int(terminal.size.width)) ?? 0
     }
 
     /// Clears the progress bar and resets the cursor.
     public func clearAndResetCursor() {
-        clear()
-        resetCursor()
+        state.withLock { s in
+            clear(state: &s)
+            switch config.outputMode {
+            case .ansi, .color:
+                resetCursor()
+            case .plain:
+                break
+            }
+        }
     }
 
     /// Clears the progress bar.
     public func clear() {
-        displayText("")
+        state.withLock { s in
+            clear(state: &s)
+        }
+    }
+
+    /// Clears the progress bar (caller must hold state lock).
+    func clear(state: inout State) {
+        displayText("", state: &state)
     }
 
     /// Resets the cursor.
@@ -63,25 +90,38 @@ extension ProgressBar {
     }
 
     func displayText(_ text: String, terminating: String = "\r") {
-        var text = text
-
-        // Clears previously printed characters if the new string is shorter.
-        text += String(repeating: " ", count: max(printedWidth - text.count, 0))
-        printedWidth = text.count
-        state.withLock {
-            $0.output = text
+        state.withLock { s in
+            displayText(text, state: &s, terminating: terminating)
         }
+    }
 
-        // Clears previously printed lines.
-        var lines = ""
-        if terminating.hasSuffix("\r") && terminalWidth > 0 {
-            let lineCount = (text.count - 1) / terminalWidth
-            for _ in 0..<lineCount {
-                lines += EscapeSequence.moveUp
+    func displayText(_ text: String, state: inout State, terminating: String = "\r") {
+        state.output = text
+
+        switch config.outputMode {
+        case .plain:
+            guard !text.isEmpty else { return }
+            display("\(text)\(terminating)")
+        case .ansi, .color:
+            // Clears previously printed lines.
+            var lines = ""
+            if terminating.hasSuffix("\r") && termWidth > 0 {
+                let textLength = config.outputMode == .color ? text.visibleLength : text.count
+                let lineCount = (textLength - 1) / termWidth
+                for _ in 0..<lineCount {
+                    lines += EscapeSequence.moveUp
+                }
             }
-        }
 
-        text = "\(text)\(terminating)\(lines)"
-        display(text)
+            let output = "\(text)\(EscapeSequence.clearToEndOfLine)\(terminating)\(lines)"
+            display(output)
+        }
+    }
+}
+
+extension String {
+    /// The visible character count, excluding ANSI escape sequences.
+    var visibleLength: Int {
+        replacingOccurrences(of: "\u{001B}\\[[0-9;]*[a-zA-Z]", with: "", options: .regularExpression).count
     }
 }

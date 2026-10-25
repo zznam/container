@@ -1,5 +1,5 @@
 //===----------------------------------------------------------------------===//
-// Copyright © 2025 Apple Inc. and the container project authors. All rights reserved.
+// Copyright © 2025-2026 Apple Inc. and the container project authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,6 +18,10 @@ import ContainerizationError
 import Foundation
 
 public struct ServiceManager {
+    enum LaunchctlStatus {
+        static let noSuchService: Int32 = 113
+    }
+
     private static func runLaunchctlCommand(args: [String]) throws -> Int32 {
         let launchctl = Foundation.Process()
         launchctl.executableURL = URL(fileURLWithPath: "/bin/launchctl")
@@ -42,6 +46,11 @@ public struct ServiceManager {
     /// Deregister a service by a launchd label.
     public static func deregister(fullServiceLabel label: String) throws {
         _ = try runLaunchctlCommand(args: ["bootout", label])
+    }
+
+    /// Deregister a service and pass return status
+    public static func deregister(fullServiceLabel label: String, status: inout Int32) throws {
+        status = try runLaunchctlCommand(args: ["bootout", label])
     }
 
     /// Restart a service by a launchd label.
@@ -72,12 +81,12 @@ public struct ServiceManager {
         let status = launchctl.terminationStatus
         guard status == 0 else {
             throw ContainerizationError(
-                .internalError, message: "Command `launchctl list` failed with status \(status). Message: \(String(data: stderrData, encoding: .utf8) ?? "No error message")")
+                .internalError, message: "command `launchctl list` failed with status \(status), message: \(String(data: stderrData, encoding: .utf8) ?? "no error message")")
         }
 
         guard let outputText = String(data: outputData, encoding: .utf8) else {
             throw ContainerizationError(
-                .internalError, message: "Could not decode output of command `launchctl list`. Message: \(String(data: stderrData, encoding: .utf8) ?? "No error message")")
+                .internalError, message: "could not decode output of command `launchctl list`, message: \(String(data: stderrData, encoding: .utf8) ?? "no error message")")
         }
 
         // The third field of each line of launchctl list output is the label
@@ -89,8 +98,40 @@ public struct ServiceManager {
 
     /// Check if a service has been registered or not.
     public static func isRegistered(fullServiceLabel label: String) throws -> Bool {
-        let exitStatus = try runLaunchctlCommand(args: ["list", label])
-        return exitStatus == 0
+        let result = try runLaunchctlPrint(target: label)
+        return try Self.interpretPrintStatus(result.status, target: label, standardError: result.standardError)
+    }
+
+    private static func runLaunchctlPrint(target: String) throws -> (status: Int32, standardError: String) {
+        let launchctl = Foundation.Process()
+        launchctl.executableURL = URL(fileURLWithPath: "/bin/launchctl")
+        launchctl.arguments = ["print", target]
+
+        let stderrPipe = Pipe()
+        launchctl.standardOutput = FileHandle.nullDevice
+        launchctl.standardError = stderrPipe
+
+        try launchctl.run()
+        let errorData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
+        launchctl.waitUntilExit()
+
+        return (launchctl.terminationStatus, String(decoding: errorData, as: UTF8.self))
+    }
+
+    static func interpretPrintStatus(_ status: Int32, target: String = "", standardError: String = "") throws -> Bool {
+        switch status {
+        case 0:
+            return true
+        case LaunchctlStatus.noSuchService:
+            return false
+        default:
+            var message = "command `launchctl print \(target)` failed with status \(status)"
+            let details = standardError.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !details.isEmpty {
+                message += ", message: \(details)"
+            }
+            throw ContainerizationError(.internalError, message: message)
+        }
     }
 
     private static func getLaunchdSessionType() throws -> String {
@@ -108,10 +149,10 @@ public struct ServiceManager {
         launchctl.waitUntilExit()
         let status = launchctl.terminationStatus
         guard status == 0 else {
-            throw ContainerizationError(.internalError, message: "Command `launchctl managername` failed with status \(status)")
+            throw ContainerizationError(.internalError, message: "command `launchctl managername` failed with status \(status)")
         }
         guard let outputText = String(data: outputData, encoding: .utf8) else {
-            throw ContainerizationError(.internalError, message: "Could not decode output of command `launchctl managername`")
+            throw ContainerizationError(.internalError, message: "could not decode output of command `launchctl managername`")
         }
         return outputText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
@@ -126,7 +167,7 @@ public struct ServiceManager {
         case LaunchPlist.Domain.Aqua.rawValue:
             return "gui/\(getuid())"
         default:
-            throw ContainerizationError(.internalError, message: "Unsupported session type \(currentSessionType)")
+            throw ContainerizationError(.internalError, message: "unsupported session type \(currentSessionType)")
         }
     }
 }

@@ -1,5 +1,5 @@
 //===----------------------------------------------------------------------===//
-// Copyright © 2025 Apple Inc. and the container project authors. All rights reserved.
+// Copyright © 2025-2026 Apple Inc. and the container project authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,25 +14,21 @@
 // limitations under the License.
 //===----------------------------------------------------------------------===//
 
-//
-
-import DNS
+import ContainerizationExtras
 import Testing
 
 @testable import DNSServer
 
 struct FooHandler: DNSHandler {
     public func answer(query: Message) async throws -> Message? {
-        if query.questions[0].name == "foo" {
-            guard let ip = IPv4("1.2.3.4") else {
-                throw DNSResolverError.serverError("cannot create IP address in test")
-            }
+        if query.questions[0].name == "foo." {
+            let ip = try IPv4Address("1.2.3.4")
             return Message(
                 id: query.id,
                 type: .response,
                 returnCode: .noError,
                 questions: query.questions,
-                answers: [HostRecord<IPv4>(name: query.questions[0].name, ttl: 0, ip: ip)]
+                answers: [HostRecord<IPv4Address>(name: query.questions[0].name, ttl: 0, ip: ip)]
             )
         }
         return nil
@@ -42,16 +38,14 @@ struct FooHandler: DNSHandler {
 struct BarHandler: DNSHandler {
     public func answer(query: Message) async throws -> Message? {
         let question = query.questions[0]
-        if question.name == "foo" || question.name == "bar" {
-            guard let ip = IPv4("5.6.7.8") else {
-                throw DNSResolverError.serverError("cannot create IP address in test")
-            }
+        if question.name == "foo." || question.name == "bar." {
+            let ip = try IPv4Address("5.6.7.8")
             return Message(
                 id: query.id,
                 type: .response,
                 returnCode: .noError,
                 questions: query.questions,
-                answers: [HostRecord<IPv4>(name: query.questions[0].name, ttl: 0, ip: ip)]
+                answers: [HostRecord<IPv4Address>(name: query.questions[0].name, ttl: 0, ip: ip)]
             )
         }
         return nil

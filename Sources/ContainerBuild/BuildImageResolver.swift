@@ -1,5 +1,5 @@
 //===----------------------------------------------------------------------===//
-// Copyright © 2025 Apple Inc. and the container project authors. All rights reserved.
+// Copyright © 2025-2026 Apple Inc. and the container project authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,18 +14,37 @@
 // limitations under the License.
 //===----------------------------------------------------------------------===//
 
-import ContainerClient
+import ContainerAPIClient
+import ContainerPersistence
 import Containerization
 import ContainerizationOCI
 import Foundation
-import GRPC
+import GRPCCore
 import Logging
+import TerminalProgress
 
+/// Handles the `resolver` stage of the build protocol.
+///
+/// Resolves image references on behalf of BuildKit: authenticates with
+/// registries, pulls missing base-image manifests and layers, and stores
+/// them in the local content store. BuildKit delegates these operations to
+/// the host because registry credentials and network access live on the
+/// macOS side, not inside the builder VM.
 struct BuildImageResolver: BuildPipelineHandler {
     let contentStore: ContentStore
+    let quiet: Bool
+    let output: FileHandle
+    let pull: Bool
+    let containerSystemConfig: ContainerSystemConfig
 
-    public init(_ contentStore: ContentStore) throws {
+    public init(_ contentStore: ContentStore, quiet: Bool = false, output: FileHandle = FileHandle.standardError, pull: Bool = false, containerSystemConfig: ContainerSystemConfig)
+        throws
+    {
         self.contentStore = contentStore
+        self.quiet = quiet
+        self.output = output
+        self.pull = pull
+        self.containerSystemConfig = containerSystemConfig
     }
 
     func accept(_ packet: ServerStream) throws -> Bool {
@@ -54,10 +73,24 @@ struct BuildImageResolver: BuildPipelineHandler {
         }
 
         let img = try await {
-            guard let img = try? await ClientImage.pull(reference: ref, platform: platform) else {
-                return try await ClientImage.fetch(reference: ref, platform: platform)
+            let progressConfig = try ProgressConfig(
+                terminal: self.output,
+                description: "Pulling \(ref)",
+                showPercent: true,
+                showProgressBar: true,
+                showSize: true,
+                showSpeed: true,
+                disableProgressUpdates: self.quiet
+            )
+            let progress = ProgressBar(config: progressConfig)
+            defer { progress.finish() }
+            progress.start()
+
+            if self.pull {
+                return try await ClientImage.pull(reference: ref, platform: platform, containerSystemConfig: containerSystemConfig, progressUpdate: progress.handler)
             }
-            return img
+            // Use fetch() which checks cache first, then pulls if needed
+            return try await ClientImage.fetch(reference: ref, platform: platform, containerSystemConfig: containerSystemConfig, progressUpdate: progress.handler)
         }()
 
         let index: Index = try await img.index()

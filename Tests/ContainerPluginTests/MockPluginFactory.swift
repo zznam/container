@@ -1,5 +1,5 @@
 //===----------------------------------------------------------------------===//
-// Copyright © 2025 Apple Inc. and the container project authors. All rights reserved.
+// Copyright © 2025-2026 Apple Inc. and the container project authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,8 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //===----------------------------------------------------------------------===//
-
-//
 
 import ContainerPlugin
 import Foundation
@@ -48,4 +46,13 @@ struct MockPluginFactory: PluginFactory {
         }
         return plugins[url]
     }
+
+    public func create(parentURL: URL, name: String) throws -> Plugin? {
+        let url = parentURL.appendingPathComponent(name).standardizedFileURL
+        guard url != self.throwingURL else {
+            throw MockPluginError()
+        }
+        return plugins[url]
+    }
+
 }

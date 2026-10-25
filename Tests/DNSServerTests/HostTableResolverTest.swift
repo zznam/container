@@ -1,5 +1,5 @@
 //===----------------------------------------------------------------------===//
-// Copyright © 2025 Apple Inc. and the container project authors. All rights reserved.
+// Copyright © 2025-2026 Apple Inc. and the container project authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,25 +14,32 @@
 // limitations under the License.
 //===----------------------------------------------------------------------===//
 
-//
-
-import DNS
+import ContainerizationExtras
 import Testing
 
 @testable import DNSServer
 
 struct HostTableResolverTest {
+    @Test func testEmptyQuestionsReturnsNil() async throws {
+        let ip = try IPv4Address("1.2.3.4")
+        let handler = try HostTableResolver(hosts4: ["foo.": ip])
+
+        let query = Message(id: UInt16(1), type: .query, questions: [])
+
+        let response = try await handler.answer(query: query)
+
+        #expect(nil == response)
+    }
+
     @Test func testUnsupportedQuestionType() async throws {
-        guard let ip = IPv4("1.2.3.4") else {
-            throw DNSResolverError.serverError("cannot create IP address in test")
-        }
-        let handler = HostTableResolver(hosts4: ["foo": ip])
+        let ip = try IPv4Address("1.2.3.4")
+        let handler = try HostTableResolver(hosts4: ["foo.": ip])
 
         let query = Message(
             id: UInt16(1),
             type: .query,
             questions: [
-                Question(name: "foo", type: .host6)
+                Question(name: "foo.", type: .mailExchange)
             ])
 
         let response = try await handler.answer(query: query)
@@ -44,17 +51,54 @@ struct HostTableResolverTest {
         #expect(0 == response?.answers.count)
     }
 
-    @Test func testHostNotPresent() async throws {
-        guard let ip = IPv4("1.2.3.4") else {
-            throw DNSResolverError.serverError("cannot create IP address in test")
-        }
-        let handler = HostTableResolver(hosts4: ["foo": ip])
+    @Test func testAAAAQueryReturnsNoDataWhenARecordExists() async throws {
+        let ip = try IPv4Address("1.2.3.4")
+        let handler = try HostTableResolver(hosts4: ["foo.": ip])
 
         let query = Message(
             id: UInt16(1),
             type: .query,
             questions: [
-                Question(name: "bar", type: .host)
+                Question(name: "foo.", type: .host6)
+            ])
+
+        let response = try await handler.answer(query: query)
+
+        // AAAA queries should return NODATA (noError with empty answers) when A record exists
+        // to avoid musl libc issues where NXDOMAIN causes complete DNS resolution failure
+        #expect(.noError == response?.returnCode)
+        #expect(1 == response?.id)
+        #expect(.response == response?.type)
+        #expect(1 == response?.questions.count)
+        #expect(0 == response?.answers.count)
+    }
+
+    @Test func testAAAAQueryReturnsNilWhenHostDoesNotExist() async throws {
+        let ip = try IPv4Address("1.2.3.4")
+        let handler = try HostTableResolver(hosts4: ["foo.": ip])
+
+        let query = Message(
+            id: UInt16(1),
+            type: .query,
+            questions: [
+                Question(name: "bar.", type: .host6)
+            ])
+
+        let response = try await handler.answer(query: query)
+
+        // AAAA queries for non-existent hosts should return nil (which becomes NXDOMAIN)
+        #expect(nil == response)
+    }
+
+    @Test func testHostNotPresent() async throws {
+        let ip = try IPv4Address("1.2.3.4")
+        let handler = try HostTableResolver(hosts4: ["foo.": ip])
+
+        let query = Message(
+            id: UInt16(1),
+            type: .query,
+            questions: [
+                Question(name: "bar.", type: .host)
             ])
 
         let response = try await handler.answer(query: query)
@@ -63,16 +107,14 @@ struct HostTableResolverTest {
     }
 
     @Test func testHostPresent() async throws {
-        guard let ip = IPv4("1.2.3.4") else {
-            throw DNSResolverError.serverError("cannot create IP address in test")
-        }
-        let handler = HostTableResolver(hosts4: ["foo": ip])
+        let ip = try IPv4Address("1.2.3.4")
+        let handler = try HostTableResolver(hosts4: ["foo.": ip])
 
         let query = Message(
             id: UInt16(1),
             type: .query,
             questions: [
-                Question(name: "foo", type: .host)
+                Question(name: "foo.", type: .host)
             ])
 
         let response = try await handler.answer(query: query)
@@ -81,10 +123,58 @@ struct HostTableResolverTest {
         #expect(1 == response?.id)
         #expect(.response == response?.type)
         #expect(1 == response?.questions.count)
-        #expect("foo" == response?.questions[0].name)
+        #expect("foo." == response?.questions[0].name)
         #expect(.host == response?.questions[0].type)
         #expect(1 == response?.answers.count)
-        let answer = response?.answers[0] as? HostRecord<IPv4>
-        #expect(IPv4("1.2.3.4") == answer?.ip)
+        let answer = response?.answers[0] as? HostRecord<IPv4Address>
+        #expect(try IPv4Address("1.2.3.4") == answer?.ip)
+    }
+
+    @Test func testHostPresentUppercaseTable() async throws {
+        let ip = try IPv4Address("1.2.3.4")
+        let handler = try HostTableResolver(hosts4: ["FOO.": ip])
+
+        let query = Message(
+            id: UInt16(1),
+            type: .query,
+            questions: [
+                Question(name: "foo.", type: .host)
+            ])
+
+        let response = try await handler.answer(query: query)
+
+        #expect(.noError == response?.returnCode)
+        #expect(1 == response?.id)
+        #expect(.response == response?.type)
+        #expect(1 == response?.questions.count)
+        #expect("foo." == response?.questions[0].name)
+        #expect(.host == response?.questions[0].type)
+        #expect(1 == response?.answers.count)
+        let answer = response?.answers[0] as? HostRecord<IPv4Address>
+        #expect(try IPv4Address("1.2.3.4") == answer?.ip)
+    }
+
+    @Test func testHostPresentUppercaseQuestion() async throws {
+        let ip = try IPv4Address("1.2.3.4")
+        let handler = try HostTableResolver(hosts4: ["foo.": ip])
+
+        let query = Message(
+            id: UInt16(1),
+            type: .query,
+            questions: [
+                Question(name: "FOO.", type: .host)
+            ])
+
+        let response = try await handler.answer(query: query)
+
+        #expect(.noError == response?.returnCode)
+        #expect(1 == response?.id)
+        #expect(.response == response?.type)
+        #expect(1 == response?.questions.count)
+        #expect("FOO." == response?.questions[0].name)
+        #expect(.host == response?.questions[0].type)
+        #expect(1 == response?.answers.count)
+        let answer = response?.answers[0] as? HostRecord<IPv4Address>
+        #expect(try IPv4Address("1.2.3.4") == answer?.ip)
     }
 }

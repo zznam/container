@@ -1,5 +1,5 @@
 //===----------------------------------------------------------------------===//
-// Copyright © 2025 Apple Inc. and the container project authors. All rights reserved.
+// Copyright © 2025-2026 Apple Inc. and the container project authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,8 +14,6 @@
 // limitations under the License.
 //===----------------------------------------------------------------------===//
 
-//
-
 import Foundation
 
 /// Value type that contains the plugin configuration, the parsed name of the
@@ -29,9 +27,13 @@ public struct Plugin: Sendable, Codable {
     /// Configuration for the plugin.
     public let config: PluginConfig
 
-    public init(binaryURL: URL, config: PluginConfig) {
+    /// Pathname to resources directory for plugins.
+    public let resourceURL: URL?
+
+    public init(binaryURL: URL, config: PluginConfig, resourceURL: URL? = nil) {
         self.binaryURL = binaryURL
         self.config = config
+        self.resourceURL = resourceURL
     }
 }
 

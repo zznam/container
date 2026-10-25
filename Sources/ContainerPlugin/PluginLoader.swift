@@ -1,5 +1,5 @@
 //===----------------------------------------------------------------------===//
-// Copyright © 2025 Apple Inc. and the container project authors. All rights reserved.
+// Copyright © 2025-2026 Apple Inc. and the container project authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,14 +15,17 @@
 //===----------------------------------------------------------------------===//
 
 import ContainerizationOS
+import Darwin
 import Foundation
 import Logging
+import SystemPackage
 
 public struct PluginLoader: Sendable {
-    // A path on disk managed by the PluginLoader, where it stores
-    // runtime data for loaded plugins. This includes the launchd plists
-    // and logs files.
-    private let defaultPluginResourcePath: URL
+    private let appRoot: URL
+
+    private let installRoot: URL
+
+    private let logRoot: FilePath?
 
     private let pluginDirectories: [URL]
 
@@ -32,19 +35,32 @@ public struct PluginLoader: Sendable {
 
     public typealias PluginQualifier = ((Plugin) -> Bool)
 
-    public init(pluginDirectories: [URL], pluginFactories: [PluginFactory], defaultResourcePath: URL, log: Logger? = nil) {
+    // A path on disk managed by the PluginLoader, where it stores
+    // runtime data for loaded plugins. This includes the launchd plists
+    // and logs files.
+    private let pluginResourceRoot: URL
+
+    public init(
+        appRoot: URL,
+        installRoot: URL,
+        logRoot: FilePath?,
+        pluginDirectories: [URL],
+        pluginFactories: [PluginFactory],
+        log: Logger? = nil
+    ) throws {
+        let pluginResourceRoot = appRoot.appendingPathComponent("plugin-state")
+        try FileManager.default.createDirectory(at: pluginResourceRoot, withIntermediateDirectories: true)
+        self.pluginResourceRoot = pluginResourceRoot
+        self.appRoot = appRoot
+        self.installRoot = installRoot
+        self.logRoot = logRoot
         self.pluginDirectories = pluginDirectories
         self.pluginFactories = pluginFactories
         self.log = log
-        self.defaultPluginResourcePath = defaultResourcePath
     }
 
-    static public func defaultPluginResourcePath(root: URL) -> URL {
-        root.appending(path: "plugin-state")
-    }
-
-    static public func userPluginsDir(root: URL) -> URL {
-        root
+    static public func userPluginsDir(installRoot: URL) -> URL {
+        installRoot
             .appending(path: "libexec")
             .appending(path: "container-plugins")
             .resolvingSymlinksInPath()
@@ -60,44 +76,70 @@ extension PluginLoader {
         }
 
         var lines = original.split(separator: "\n").map { String($0) }
+        let pluginLines = plugins.map { $0.helpText(padding: 24) }
 
-        let sectionHeader = "PLUGINS:"
-        lines.append(sectionHeader)
-
-        for plugin in plugins {
-            let helpText = plugin.helpText(padding: 24)
-            lines.append(helpText)
+        // List plugin CLI surfaces alongside the built-in "other" commands
+        // rather than under their own section, since from the user's
+        // perspective they're just more subcommands.
+        guard let otherHeaderIndex = lines.firstIndex(of: "OTHER SUBCOMMANDS:") else {
+            lines.append("OTHER SUBCOMMANDS:")
+            lines.append(contentsOf: pluginLines)
+            return lines.joined(separator: "\n")
         }
+
+        var insertionIndex = otherHeaderIndex + 1
+        while insertionIndex < lines.count, lines[insertionIndex].hasPrefix("  ") {
+            insertionIndex += 1
+        }
+        lines.insert(contentsOf: pluginLines, at: insertionIndex)
 
         return lines.joined(separator: "\n")
     }
 
+    /// Scan all plugin directories and detect plugins.
     public func findPlugins() -> [Plugin] {
         let fm = FileManager.default
 
+        // Maintain a set for tracking shadowed plugins
         var pluginNames = Set<String>()
         var plugins: [Plugin] = []
 
         for pluginDir in pluginDirectories {
+            // Skip nonexistent plugin parent directories
             if !fm.fileExists(atPath: pluginDir.path) {
                 continue
             }
 
+            // Get all entries under the parent directory
+            let resolvedPluginDir = pluginDir.resolvingSymlinksInPath()
             guard
-                var dirs = try? fm.contentsOfDirectory(
-                    at: pluginDir,
-                    includingPropertiesForKeys: [.isDirectoryKey],
+                let urls = try? fm.contentsOfDirectory(
+                    at: resolvedPluginDir,
+                    includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey],
                     options: .skipsHiddenFiles
                 )
             else {
                 continue
             }
-            dirs = dirs.filter {
-                $0.isDirectory
+
+            // Filter out all but plugin installation directories
+            let installURLs = urls.filter { url in
+                if url.isDirectory {
+                    return true
+                }
+
+                if url.isSymlink {
+                    var isDirectory: ObjCBool = false
+                    _ = fm.fileExists(atPath: url.resolvingSymlinksInPath().path(percentEncoded: false), isDirectory: &isDirectory)
+                    return isDirectory.boolValue
+                }
+
+                return false
             }
 
-            for installURL in dirs {
+            for installURL in installURLs {
                 do {
+                    // Create a plugin with the first factory that can grok the layout under the install URL
                     guard
                         let plugin = try
                             (pluginFactories.compactMap {
@@ -105,7 +147,7 @@ extension PluginLoader {
                             }.first)
                     else {
                         log?.warning(
-                            "Not installing plugin with missing configuration",
+                            "not installing plugin with missing configuration",
                             metadata: [
                                 "path": "\(installURL.path)"
                             ]
@@ -113,9 +155,10 @@ extension PluginLoader {
                         continue
                     }
 
+                    // Warn and skip if this plugin name has been encountered already
                     guard !pluginNames.contains(plugin.name) else {
                         log?.warning(
-                            "Not installing shadowed plugin",
+                            "not installing shadowed plugin",
                             metadata: [
                                 "path": "\(installURL.path)",
                                 "name": "\(plugin.name)",
@@ -123,11 +166,12 @@ extension PluginLoader {
                         continue
                     }
 
+                    // Add the plugin to the list
                     plugins.append(plugin)
                     pluginNames.insert(plugin.name)
                 } catch {
                     log?.warning(
-                        "Not installing plugin with invalid configuration",
+                        "not installing plugin with invalid configuration",
                         metadata: [
                             "path": "\(installURL.path)",
                             "error": "\(error)",
@@ -140,33 +184,78 @@ extension PluginLoader {
         return plugins
     }
 
+    /// Locate a plugin with a specific name.
     public func findPlugin(name: String, log: Logger? = nil) -> Plugin? {
         do {
-            return
-                try pluginDirectories
-                .compactMap { installURL in
-                    try pluginFactories.compactMap { try $0.create(installURL: installURL.appending(path: name)) }.first
+            for pluginDirectory in pluginDirectories {
+                for PluginFactory in pluginFactories {
+                    // throw means that the factory is correct but the plugin is broken
+                    if let plugin = try PluginFactory.create(parentURL: pluginDirectory, name: name) {
+                        return plugin
+                    }
                 }
-                .first
+            }
         } catch {
             log?.warning(
-                "Not installing plugin with invalid configuration",
+                "not installing plugin with invalid configuration",
                 metadata: [
                     "name": "\(name)",
                     "error": "\(error)",
                 ]
             )
+        }
+
+        return nil
+    }
+
+    /// Locate the plugin whose executable resolves to `path`, e.g. to let a
+    /// running plugin process identify its own `Plugin` (and thus its
+    /// `resourceURL`) from `CommandLine.executablePath`.
+    public func findPlugin(forExecutable path: FilePath) -> Plugin? {
+        guard let resolvedPath = Self.resolveSymlinks(path.string) else {
             return nil
         }
+        for plugin in findPlugins() {
+            guard let binaryPath = Self.resolveSymlinks(plugin.binaryURL.path(percentEncoded: false)) else {
+                continue
+            }
+            if binaryPath == resolvedPath {
+                return plugin
+            }
+        }
+        return nil
+    }
+
+    private static func resolveSymlinks(_ path: String) -> String? {
+        guard let resolved = Darwin.realpath(path, nil) else {
+            return nil
+        }
+        defer { free(resolved) }
+        return String(cString: resolved)
     }
 }
 
 extension PluginLoader {
+    public static let proxyKeys: Set<String> = {
+        var keys: Set<String> = [
+            "http_proxy", "HTTP_PROXY",
+            "https_proxy", "HTTPS_PROXY",
+            "no_proxy", "NO_PROXY",
+        ]
+        #if CONTAINER_COVERAGE
+        // Allows LLVM coverage profiling data to be written by launchd-managed
+        // helper processes. Compiled in only for coverage enabled builds.
+        keys.insert("LLVM_PROFILE_FILE")
+        #endif
+        return keys
+    }()
+
     public func registerWithLaunchd(
         plugin: Plugin,
-        rootURL: URL? = nil,
+        pluginStateRoot: URL? = nil,
         args: [String]? = nil,
-        instanceId: String? = nil
+        instanceId: String? = nil,
+        debug: Bool = false,
     ) throws {
         // We only care about loading plugins that have a service
         // to expose; otherwise, they may just be CLI commands.
@@ -176,20 +265,28 @@ extension PluginLoader {
 
         let id = plugin.getLaunchdLabel(instanceId: instanceId)
         log?.info("Registering plugin", metadata: ["id": "\(id)"])
-        let rootURL = rootURL ?? self.defaultPluginResourcePath.appending(path: plugin.name)
+        let rootURL = pluginStateRoot ?? self.pluginResourceRoot.appending(path: plugin.name)
+        let resourceURL = plugin.resourceURL
+
         try FileManager.default.createDirectory(at: rootURL, withIntermediateDirectories: true)
-        let env = ProcessInfo.processInfo.environment.filter { key, _ in
-            key.hasPrefix("CONTAINER_")
+
+        var env = Self.filterEnvironment()
+        env[ApplicationRoot.environmentName] = appRoot.path(percentEncoded: false)
+        env[InstallRoot.environmentName] = installRoot.path(percentEncoded: false)
+        if let logRoot {
+            env[LogRoot.environmentName] =
+                logRoot.isAbsolute
+                ? logRoot.string
+                : FilePath(FileManager.default.currentDirectoryPath).appending(logRoot.components).string
         }
-        let logUrl = rootURL.appendingPathComponent("service.log")
+
+        let processedArgs = (args ?? ["start"]) + (resourceURL.map { ["--resources", $0.path] } ?? []) + (debug ? ["--debug"] : [])
         let plist = LaunchPlist(
             label: id,
-            arguments: [plugin.binaryURL.path] + (args ?? serviceConfig.defaultArguments),
+            arguments: [plugin.binaryURL.path] + processedArgs + serviceConfig.defaultArguments,
             environment: env,
             limitLoadToSessionType: [.Aqua, .Background, .System],
             runAtLoad: serviceConfig.runAtLoad,
-            stdout: logUrl.path,
-            stderr: logUrl.path,
             machServices: plugin.getMachServices(instanceId: instanceId)
         )
 
@@ -209,5 +306,14 @@ extension PluginLoader {
         let label = "\(domain)/\(plugin.getLaunchdLabel(instanceId: instanceId))"
         log?.info("Deregistering plugin", metadata: ["id": "\(plugin.getLaunchdLabel())"])
         try ServiceManager.deregister(fullServiceLabel: label)
+    }
+
+    public static func filterEnvironment(
+        env: [String: String] = ProcessInfo.processInfo.environment,
+        additionalAllowKeys: Set<String> = Self.proxyKeys
+    ) -> [String: String] {
+        env.filter { key, _ in
+            key.hasPrefix("CONTAINER_") || additionalAllowKeys.contains(key)
+        }
     }
 }
