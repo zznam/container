@@ -1,5 +1,10 @@
 # Technical Overview
 
+> [!IMPORTANT]
+> This file contains documentation for the CURRENT BRANCH. To find documentation for official releases, find the target release on the [Release Page](https://github.com/apple/container/releases) and click the tag corresponding to your release version. 
+>
+> Example: [release 0.4.1 tag](https://github.com/apple/container/tree/0.4.1)
+
 A brief description and technical overview of `container`.
 
 ## What are containers?
@@ -16,7 +21,7 @@ None of this workflow would be practical without ensuring interoperability betwe
 
 ## How does `container` run my container?
 
-Many operating systems support containers, but the most commonly encountered containers are those that run on the Linux operating system. On macOS, the typical way to run Linux containers is to launch a Linux virtual machine (VM) that hosts all of your containers.
+Many operating systems support containers, but the most commonly encountered containers are those that run on the Linux operating system. With macOS, the typical way to run Linux containers is to launch a Linux virtual machine (VM) that hosts all of your containers.
 
 `container` runs containers differently. Using the open source [Containerization](https://github.com/apple/containerization) package, it runs a lightweight VM for each container that you create. This approach has the following properties:
 
@@ -47,27 +52,15 @@ When `container-apiserver` starts, it launches an XPC helper `container-core-ima
 
 With the initial release of `container`, you get basic facilities for building and running containers, but many common containerization features remain to be implemented. Consider [contributing](../CONTRIBUTING.md) new features and bug fixes to `container` and the Containerization projects!
 
-### Container to host networking
-
-In the initial release, there is no way to route traffic directly from a client in a container to a host-based application listening on the loopback interface at 127.0.0.1. If you were to configure the application in your container to connect to 127.0.0.1 or `localhost`, requests would simply go to the loopback interface in the container, rather than your host-based service.
-
-You can work around this limitation by configuring the host-based application to listen on the wildcard address 0.0.0.0, but this practice is insecure and not recommended because, without firewall rules, this exposes the application to external requests.
-
-A more secure approach uses `socat` to redirect traffic from the container network gateway to the host-based service. For example, to forward traffic for port 8000, configure your containerized application to connect to `192.168.64.1:8000` instead of `127.0.0.1:8000`, and then run the following command in a terminal on your Mac to forward the port traffic from the gateway to the host:
-
-```bash
-socat TCP-LISTEN:8000,fork,bind=192.168.64.1 TCP:127.0.0.1:8000
-```
-
 ### Releasing container memory to macOS
 
-The macOS Virtualization framework implements only partial support for memory ballooning, which is a technology that allows virtual machines to dynamically use and relinquish host memory. When you create a container, the underlying virtual machine only uses the amount of memory that the containerized application needs. For example, you might start a container using the option `--memory 16g`, but see that the application is only using 2 gigabytes of RAM in the macOS Activity Monitor.
+The macOS Virtualization framework implements only partial support for memory ballooning, which is a technology that allows virtual machines to dynamically use and relinquish host memory. When you create a container, the underlying virtual machine only uses the amount of memory that the containerized application needs. For example, you might start a container using the option `--memory 16g`, but see that the application is only using 2 GiBytes of RAM in the macOS Activity Monitor.
 
 Currently, memory pages freed to the Linux operating system by processes running in the container's VM are not relinquished to the host. If you run many memory-intensive containers, you may need to occasionally restart them to reduce memory utilization.
 
 ### macOS 15 limitations
 
-`container` relies on the new features and enhancements present in the macOS 26 beta. You can run `container` on macOS 15, but you will need to be aware of some user experience and functional limitations. There is no plan to address issues found with macOS 15 that cannot be reproduced in the macOS 26 beta.
+`container` relies on the new features and enhancements present in macOS 26. You can run `container` on macOS 15, but you will need to be aware of some user experience and functional limitations. There is no plan to address issues found with macOS 15 that cannot be reproduced on macOS 26.
 
 #### Network isolation
 
@@ -81,15 +74,4 @@ In macOS 15, all containers attach to the default vmnet network. The `container 
 
 In macOS 15, limitations in the vmnet framework mean that the container network can only be created when the first container starts. Since the network XPC helper provides IP addresses to containers, and the helper has to start before the first container, it is possible for the network helper and vmnet to disagree on the subnet address, resulting in containers that are completely cut off from the network.
 
-Normally, vmnet creates the container network using the CIDR address 192.168.64.1/24, and on macOS 15, `container` defaults to using this CIDR address in the network helper. To diagnose and resolve issues stemming from a subnet address mismatch between vmnet and the network helper:
-
-- Before creating the first container, scan the output of the command `ifconfig` for a bridge interface named similarly to `bridge100`.
-- After creating the first container, run `ifconfig` again, and locate the new bridge interface to determine the container subnet address.
-- Run `container ls` to check the IP address given to the container by the network helper. If the address corresponds to a different network:
-  - Run `container system stop` to terminate the services for `container`.
-  - Using the macOS `defaults` command, update the default subnet value used by the network helper process. For example, if the bridge address shown by `ifconfig` is 192.168.66.1, run:
-    ```bash
-    defaults write com.apple.container.defaults network.subnet 192.168.66.1/24
-    ```
-  - Run `container system start` to launch services again.
-  - Try running the container again and verify that its IP address matches the current bridge interface value.
+Normally, vmnet creates the container network using the CIDR address 192.168.64.1/24, and on macOS 15, `container` defaults to using this CIDR address in the network helper.

@@ -1,5 +1,5 @@
 //===----------------------------------------------------------------------===//
-// Copyright © 2025 Apple Inc. and the container project authors. All rights reserved.
+// Copyright © 2025-2026 Apple Inc. and the container project authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,9 +16,14 @@
 
 import ContainerizationOS
 import Foundation
-import GRPC
+import GRPCCore
 import NIO
 
+/// Handles the stdio stage of the build protocol.
+///
+/// Relays builder stdout/stderr from the shim to the client terminal.
+/// Build output (layer download progress, `RUN` command output, etc.) flows
+/// through this handler and is written directly to the configured file handle.
 actor BuildStdio: BuildPipelineHandler {
     public let quiet: Bool
     public let handle: FileHandle

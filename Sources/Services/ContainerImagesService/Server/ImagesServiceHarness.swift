@@ -1,5 +1,5 @@
 //===----------------------------------------------------------------------===//
-// Copyright © 2025 Apple Inc. and the container project authors. All rights reserved.
+// Copyright © 2025-2026 Apple Inc. and the container project authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,8 +14,9 @@
 // limitations under the License.
 //===----------------------------------------------------------------------===//
 
-import ContainerClient
+import ContainerAPIClient
 import ContainerImagesServiceClient
+import ContainerResource
 import ContainerXPC
 import Containerization
 import ContainerizationError
@@ -47,13 +48,29 @@ public struct ImagesServiceHarness: Sendable {
             platform = try JSONDecoder().decode(ContainerizationOCI.Platform.self, from: platformData)
         }
         let insecure = message.bool(key: .insecureFlag)
+        let maxConcurrentDownloads = message.int64(key: .maxConcurrentDownloads)
 
         let progressUpdateService = ProgressUpdateService(message: message)
-        let imageDescription = try await service.pull(reference: ref, platform: platform, insecure: insecure, progressUpdate: progressUpdateService?.handler)
+        let imageDescription = try await service.pull(
+            reference: ref, platform: platform, insecure: insecure, progressUpdate: progressUpdateService?.handler, maxConcurrentDownloads: Int(maxConcurrentDownloads))
 
         let imageData = try JSONEncoder().encode(imageDescription)
         let reply = message.reply()
         reply.set(key: .imageDescription, value: imageData)
+        return reply
+    }
+
+    @Sendable
+    public func platforms(_ message: XPCMessage) async throws -> XPCMessage {
+        guard let ref = message.string(key: .imageReference) else {
+            throw ContainerizationError(.invalidArgument, message: "missing image reference")
+        }
+
+        let platforms = try await service.platforms(reference: ref, insecure: message.bool(key: .insecureFlag))
+        let data = try JSONEncoder().encode(platforms)
+
+        let reply = message.reply()
+        reply.set(key: .ociPlatforms, value: data)
         return reply
     }
 
@@ -129,14 +146,15 @@ public struct ImagesServiceHarness: Sendable {
 
     @Sendable
     public func save(_ message: XPCMessage) async throws -> XPCMessage {
-        let data = message.dataNoCopy(key: .imageDescription)
+        let data = message.dataNoCopy(key: .imageDescriptions)
         guard let data else {
             throw ContainerizationError(
                 .invalidArgument,
                 message: "missing image description"
             )
         }
-        let imageDescription = try JSONDecoder().decode(ImageDescription.self, from: data)
+        let imageDescriptions = try JSONDecoder().decode([ImageDescription].self, from: data)
+        let references = imageDescriptions.map { $0.reference }
 
         let platformData = message.dataNoCopy(key: .ociPlatform)
         var platform: Platform? = nil
@@ -150,7 +168,7 @@ public struct ImagesServiceHarness: Sendable {
                 message: "missing output file path"
             )
         }
-        try await service.save(reference: imageDescription.reference, out: URL(filePath: out), platform: platform)
+        try await service.save(references: references, out: URL(filePath: out), platform: platform)
         let reply = message.reply()
         return reply
     }
@@ -158,26 +176,53 @@ public struct ImagesServiceHarness: Sendable {
     @Sendable
     public func load(_ message: XPCMessage) async throws -> XPCMessage {
         let input = message.string(key: .filePath)
+        let force = message.bool(key: .forceLoad)
         guard let input else {
             throw ContainerizationError(
                 .invalidArgument,
                 message: "missing input file path"
             )
         }
-        let images = try await service.load(from: URL(filePath: input))
-        let data = try JSONEncoder().encode(images)
+        let (images, rejectedMembers) = try await service.load(
+            from: URL(filePath: input),
+            force: force
+        )
         let reply = message.reply()
-        reply.set(key: .imageDescriptions, value: data)
+        let imagesData = try JSONEncoder().encode(images)
+        reply.set(key: .imageDescriptions, value: imagesData)
+        let rejectedData = try JSONEncoder().encode(rejectedMembers)
+        reply.set(key: .rejectedMembers, value: rejectedData)
         return reply
     }
 
     @Sendable
-    public func prune(_ message: XPCMessage) async throws -> XPCMessage {
-        let (deleted, size) = try await service.prune()
+    public func cleanUpOrphanedBlobs(_ message: XPCMessage) async throws -> XPCMessage {
+        let (deleted, size) = try await service.cleanUpOrphanedBlobs()
         let reply = message.reply()
         let data = try JSONEncoder().encode(deleted)
         reply.set(key: .digests, value: data)
-        reply.set(key: .size, value: size)
+        reply.set(key: .imageSize, value: size)
+        return reply
+    }
+
+    @Sendable
+    public func calculateDiskUsage(_ message: XPCMessage) async throws -> XPCMessage {
+        // Decode active image references from the message
+        let activeRefsData = message.dataNoCopy(key: .activeImageReferences)
+        let activeRefs: Set<String>
+        if let activeRefsData {
+            activeRefs = try JSONDecoder().decode(Set<String>.self, from: activeRefsData)
+        } else {
+            activeRefs = Set<String>()
+        }
+
+        let (total, active, size, reclaimable) = try await service.calculateDiskUsage(activeReferences: activeRefs)
+
+        let reply = message.reply()
+        reply.set(key: .totalCount, value: Int64(total))
+        reply.set(key: .activeCount, value: Int64(active))
+        reply.set(key: .imageSize, value: size)
+        reply.set(key: .reclaimableSize, value: reclaimable)
         return reply
     }
 }

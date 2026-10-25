@@ -3,10 +3,16 @@ builder:
   configs:
     -
       documentation_targets:
-        - ContainerSandboxService
+        - ContainerAPIService
+        - ContainerAPIClient
+        - ContainerRuntimeClient
+        - ContainerRuntimeLinuxClient
+        - ContainerRuntimeLinuxServer
         - ContainerNetworkService
+        - ContainerNetworkServiceClient
         - ContainerImagesService
-        - ContainerClient
+        - ContainerImagesServiceClient
+        - ContainerResource
         - ContainerLog
         - ContainerPlugin
         - ContainerXPC

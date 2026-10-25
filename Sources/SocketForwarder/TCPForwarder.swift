@@ -1,5 +1,5 @@
 //===----------------------------------------------------------------------===//
-// Copyright © 2025 Apple Inc. and the container project authors. All rights reserved.
+// Copyright © 2025-2026 Apple Inc. and the container project authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,17 +26,21 @@ public struct TCPForwarder: SocketForwarder {
 
     private let eventLoopGroup: any EventLoopGroup
 
+    private let connectTimeout: TimeAmount
+
     private let log: Logger?
 
     public init(
         proxyAddress: SocketAddress,
         serverAddress: SocketAddress,
         eventLoopGroup: any EventLoopGroup,
+        connectTimeout: TimeAmount = .seconds(10),
         log: Logger? = nil
     ) throws {
         self.proxyAddress = proxyAddress
         self.serverAddress = serverAddress
         self.eventLoopGroup = eventLoopGroup
+        self.connectTimeout = connectTimeout
         self.log = log
     }
 
@@ -46,10 +50,13 @@ public struct TCPForwarder: SocketForwarder {
         let bootstrap = ServerBootstrap(group: self.eventLoopGroup)
             .serverChannelOption(ChannelOptions.socket(.init(SOL_SOCKET), .init(SO_REUSEADDR)), value: 1)
             .childChannelOption(ChannelOptions.socket(.init(SOL_SOCKET), .init(SO_REUSEADDR)), value: 1)
+            // Reads are paused until the backend connects; the client's bytes are held in the
+            // kernel receive buffer instead of an app-level buffer while we wait.
+            .childChannelOption(ChannelOptions.autoRead, value: false)
             .childChannelInitializer { channel in
                 channel.eventLoop.makeCompletedFuture {
                     try channel.pipeline.syncOperations.addHandler(
-                        ConnectHandler(serverAddress: self.serverAddress, log: log)
+                        ConnectHandler(serverAddress: self.serverAddress, connectTimeout: self.connectTimeout, log: log)
                     )
                 }
             }
@@ -57,6 +64,6 @@ public struct TCPForwarder: SocketForwarder {
         return
             bootstrap
             .bind(to: self.proxyAddress)
-            .flatMap { $0.eventLoop.makeSucceededFuture(SocketForwarderResult(channel: $0)) }
+            .map { SocketForwarderResult(channel: $0) }
     }
 }

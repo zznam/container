@@ -1,5 +1,5 @@
 //===----------------------------------------------------------------------===//
-// Copyright © 2025 Apple Inc. and the container project authors. All rights reserved.
+// Copyright © 2025-2026 Apple Inc. and the container project authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -54,6 +54,13 @@ extension URL {
         self.path.fs_cleaned
     }
 
+    /// Returns true if `url` is lexically a descendant of `self`.
+    ///
+    /// This is a **string-prefix check** on the normalised path components; it
+    /// does not call `realpath` or resolve symlinks. A URL that is lexically
+    /// inside the context root but reachable through an intermediate symlink
+    /// that points outside it will still pass this check. Callers that need
+    /// physical containment must resolve symlinks before calling this method.
     func parentOf(_ url: URL) -> Bool {
         let parentPath = self.absoluteURL.cleanPath
         let childPath = url.absoluteURL.cleanPath
@@ -78,18 +85,6 @@ extension URL {
         let selfParts = cleanPath.fs_components
 
         return selfParts.dropFirst(ctxParts.count).joined(separator: "/")
-    }
-
-    func relativePathFrom(from base: URL) -> String {
-        let destParts = cleanPath.fs_components
-        let baseParts = base.cleanPath.fs_components
-
-        let common = zip(destParts, baseParts).prefix { $0 == $1 }.count
-        guard common > 0 else { return cleanPath }
-
-        let ups = Array(repeating: "..", count: baseParts.count - common)
-        let remainder = destParts.dropFirst(common)
-        return (ups + remainder).joined(separator: "/")
     }
 
     func zeroCopyReader(
@@ -228,7 +223,7 @@ public final class BufferedCopyReader: AsyncSequence {
         throw CocoaError(
             .fileReadUnsupportedScheme,
             userInfo: [
-                NSLocalizedDescriptionKey: "Reset not supported with InputStream-based implementation"
+                NSLocalizedDescriptionKey: "reset not supported with InputStream-based implementation"
             ])
     }
 
@@ -240,7 +235,7 @@ public final class BufferedCopyReader: AsyncSequence {
         throw CocoaError(
             .fileReadUnsupportedScheme,
             userInfo: [
-                NSLocalizedDescriptionKey: "Offset tracking not supported with InputStream-based implementation"
+                NSLocalizedDescriptionKey: "offset tracking not supported with InputStream-based implementation"
             ])
     }
 
@@ -252,7 +247,7 @@ public final class BufferedCopyReader: AsyncSequence {
         throw CocoaError(
             .fileReadUnsupportedScheme,
             userInfo: [
-                NSLocalizedDescriptionKey: "Seeking not supported with InputStream-based implementation"
+                NSLocalizedDescriptionKey: "seeking not supported with InputStream-based implementation"
             ])
     }
 

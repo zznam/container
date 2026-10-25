@@ -13,7 +13,9 @@ api-docs/
 workdir/
 installer/
 .venv/
+.claude/
 .clitests/
+.vscode/
 test_results/
 *.pid
 *.log
@@ -23,6 +25,14 @@ test_results/
 *.pkg
 *.swp
 
+# Coverage artifacts
+*.profraw
+coverage-reports/
+
 # API docs for local preview only.
 _site/
 _serve/
+
+# Default APP_ROOT and SCRATCH_ROOT for local test runs.
+.test-data/
+.test-scratch/

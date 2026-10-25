@@ -1,5 +1,5 @@
 //===----------------------------------------------------------------------===//
-// Copyright © 2025 Apple Inc. and the container project authors. All rights reserved.
+// Copyright © 2025-2026 Apple Inc. and the container project authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,10 +24,6 @@ public typealias ClientStream = Com_Apple_Container_Build_V1_ClientStream
 public typealias ServerStream = Com_Apple_Container_Build_V1_ServerStream
 public typealias ImageTransfer = Com_Apple_Container_Build_V1_ImageTransfer
 public typealias BuildTransfer = Com_Apple_Container_Build_V1_BuildTransfer
-public typealias BuilderClient = Com_Apple_Container_Build_V1_BuilderNIOClient
-public typealias BuilderClientAsync = Com_Apple_Container_Build_V1_BuilderAsyncClient
-public typealias BuilderClientProtocol = Com_Apple_Container_Build_V1_BuilderClientProtocol
-public typealias BuilderClientAsyncProtocol = Com_Apple_Container_Build_V1_BuilderAsyncClient
 
 extension BuildTransfer {
     func stage() -> String? {

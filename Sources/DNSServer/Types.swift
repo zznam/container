@@ -1,5 +1,5 @@
 //===----------------------------------------------------------------------===//
-// Copyright © 2025 Apple Inc. and the container project authors. All rights reserved.
+// Copyright © 2025-2026 Apple Inc. and the container project authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,17 +14,7 @@
 // limitations under the License.
 //===----------------------------------------------------------------------===//
 
-//
-
-import DNS
 import Foundation
-
-public typealias Message = DNS.Message
-public typealias ResourceRecord = DNS.ResourceRecord
-public typealias HostRecord = DNS.HostRecord
-public typealias IPv4 = DNS.IPv4
-public typealias IPv6 = DNS.IPv6
-public typealias ReturnCode = DNS.ReturnCode
 
 public enum DNSResolverError: Swift.Error, CustomStringConvertible {
     case serverError(_ msg: String)

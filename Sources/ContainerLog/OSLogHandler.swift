@@ -1,5 +1,5 @@
 //===----------------------------------------------------------------------===//
-// Copyright © 2025 Apple Inc. and the container project authors. All rights reserved.
+// Copyright © 2025-2026 Apple Inc. and the container project authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,8 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //===----------------------------------------------------------------------===//
-
-//
 
 import Foundation
 import Logging
@@ -49,17 +47,9 @@ public struct OSLogHandler: LogHandler {
 }
 
 extension OSLogHandler {
-    public func log(
-        level: Logger.Level,
-        message: Logger.Message,
-        metadata: Logger.Metadata?,
-        source: String,
-        file: String,
-        function: String,
-        line: UInt
-    ) {
+    public func log(event: LogEvent) {
         var formattedMetadata = self.formattedMetadata
-        if let metadataOverride = metadata, !metadataOverride.isEmpty {
+        if let metadataOverride = event.metadata, !metadataOverride.isEmpty {
             formattedMetadata = self.formatMetadata(
                 self.metadata.merging(metadataOverride) {
                     $1
@@ -67,13 +57,13 @@ extension OSLogHandler {
             )
         }
 
-        var finalMessage = message.description
+        var finalMessage = event.message.description
         if let formattedMetadata {
             finalMessage += " " + formattedMetadata
         }
 
         self.logger.log(
-            level: level.toOSLogLevel(),
+            level: event.level.toOSLogLevel(),
             "\(finalMessage, privacy: .public)"
         )
     }
@@ -95,9 +85,9 @@ extension Logger.Level {
             return .debug
         case .info:
             return .info
-        case .notice:
+        case .notice, .warning:
             return .default
-        case .error, .warning:
+        case .error:
             return .error
         case .critical:
             return .fault

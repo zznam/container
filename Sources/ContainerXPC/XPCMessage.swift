@@ -1,5 +1,5 @@
 //===----------------------------------------------------------------------===//
-// Copyright © 2025 Apple Inc. and the container project authors. All rights reserved.
+// Copyright © 2025-2026 Apple Inc. and the container project authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -78,12 +78,23 @@ extension XPCMessage {
     public func error() throws {
         let data = data(key: Self.errorKey)
         if let data {
-            let item = try? JSONDecoder().decode(ContainerXPCError.self, from: data)
-            precondition(item != nil, "expected to receive a ContainerXPCXPCError")
+            guard let item = try? JSONDecoder().decode(ContainerXPCError.self, from: data) else {
+                throw ContainerizationError(
+                    .internalError,
+                    message: "received a malformed error payload from the XPC peer"
+                )
+            }
 
-            throw ContainerizationError(item!.code, message: item!.message)
+            throw ContainerizationError(item.code, message: item.message)
         }
     }
+
+    /// Fallback error if `JSONEncoder` fails to encode the original error. In practice this should
+    /// never get used.
+    private static let fallbackErrorData = Data(
+        #"{"code":"\#(ContainerizationError.Code.internalError.description)","message":"the daemon failed to encode the original error"}"#
+            .utf8
+    )
 
     public func set(error: ContainerizationError) {
         var message = error.message
@@ -91,10 +102,12 @@ extension XPCMessage {
             message += " (cause: \"\(cause)\")"
         }
         let serializableError = ContainerXPCError(code: error.code.description, message: message)
-        let data = try? JSONEncoder().encode(serializableError)
-        precondition(data != nil)
+        guard let data = try? JSONEncoder().encode(serializableError) else {
+            set(key: Self.errorKey, value: Self.fallbackErrorData)
+            return
+        }
 
-        set(key: Self.errorKey, value: data!)
+        set(key: Self.errorKey, value: data)
     }
 }
 
@@ -201,6 +214,20 @@ extension XPCMessage {
         }
     }
 
+    public func date(key: String) -> Date {
+        lock.withLock {
+            let nsSinceEpoch = xpc_dictionary_get_date(self.object, key)
+            return Date(timeIntervalSince1970: TimeInterval(nsSinceEpoch) / 1_000_000_000)
+        }
+    }
+
+    public func set(key: String, value: Date) {
+        lock.withLock {
+            let nsSinceEpoch = Int64(value.timeIntervalSince1970 * 1_000_000_000)
+            xpc_dictionary_set_date(self.object, key, nsSinceEpoch)
+        }
+    }
+
     public func fileHandle(key: String) -> FileHandle? {
         let fd = lock.withLock {
             xpc_dictionary_get_value(self.object, key)
@@ -252,6 +279,12 @@ extension XPCMessage {
         }
         lock.withLock {
             xpc_dictionary_set_value(self.object, key, fdArray)
+        }
+    }
+
+    public func set(key: String, xpcDictionary: xpc_object_t) {
+        lock.withLock {
+            xpc_dictionary_set_value(self.object, key, xpcDictionary)
         }
     }
 

@@ -1,5 +1,5 @@
 //===----------------------------------------------------------------------===//
-// Copyright © 2025 Apple Inc. and the container project authors. All rights reserved.
+// Copyright © 2025-2026 Apple Inc. and the container project authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,7 +24,11 @@
 // For information on using the generated types, please see the documentation:
 //   https://github.com/apple/swift-protobuf/
 
+#if canImport(FoundationEssentials)
+import FoundationEssentials
+#else
 import Foundation
+#endif
 import SwiftProtobuf
 
 // If the compiler emits an error on this type, it is because this file
@@ -32,12 +36,12 @@ import SwiftProtobuf
 // incompatible with the version of SwiftProtobuf to which you are linking.
 // Please ensure that you are building against the same version of the API
 // that was used to generate this file.
-fileprivate struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAPIVersionCheck {
+fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAPIVersionCheck {
   struct _2: SwiftProtobuf.ProtobufAPIVersion_2 {}
   typealias Version = _2
 }
 
-public enum Com_Apple_Container_Build_V1_TransferDirection: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum Com_Apple_Container_Build_V1_TransferDirection: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case into // = 0
   case outof // = 1
@@ -72,7 +76,7 @@ public enum Com_Apple_Container_Build_V1_TransferDirection: SwiftProtobuf.Enum, 
 }
 
 /// Standard input/output.
-public enum Com_Apple_Container_Build_V1_Stdio: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum Com_Apple_Container_Build_V1_Stdio: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case stdin // = 0
   case stdout // = 1
@@ -111,7 +115,7 @@ public enum Com_Apple_Container_Build_V1_Stdio: SwiftProtobuf.Enum, Swift.CaseIt
 }
 
 /// Build error type.
-public enum Com_Apple_Container_Build_V1_BuildErrorType: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum Com_Apple_Container_Build_V1_BuildErrorType: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
   case buildFailed // = 0
   case `internal` // = 1
@@ -145,7 +149,7 @@ public enum Com_Apple_Container_Build_V1_BuildErrorType: SwiftProtobuf.Enum, Swi
 
 }
 
-public struct Com_Apple_Container_Build_V1_InfoRequest: Sendable {
+public nonisolated struct Com_Apple_Container_Build_V1_InfoRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -155,7 +159,7 @@ public struct Com_Apple_Container_Build_V1_InfoRequest: Sendable {
   public init() {}
 }
 
-public struct Com_Apple_Container_Build_V1_InfoResponse: Sendable {
+public nonisolated struct Com_Apple_Container_Build_V1_InfoResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -165,7 +169,7 @@ public struct Com_Apple_Container_Build_V1_InfoResponse: Sendable {
   public init() {}
 }
 
-public struct Com_Apple_Container_Build_V1_CreateBuildRequest: Sendable {
+public nonisolated struct Com_Apple_Container_Build_V1_CreateBuildRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -190,7 +194,7 @@ public struct Com_Apple_Container_Build_V1_CreateBuildRequest: Sendable {
   public init() {}
 }
 
-public struct Com_Apple_Container_Build_V1_CreateBuildResponse: Sendable {
+public nonisolated struct Com_Apple_Container_Build_V1_CreateBuildResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -206,14 +210,14 @@ public struct Com_Apple_Container_Build_V1_CreateBuildResponse: Sendable {
   public init() {}
 }
 
-public struct Com_Apple_Container_Build_V1_ClientStream: @unchecked Sendable {
+public nonisolated struct Com_Apple_Container_Build_V1_ClientStream: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   /// A unique ID for the build.
   public var buildID: String {
-    get {return _storage._buildID}
+    get {_storage._buildID}
     set {_uniqueStorage()._buildID = newValue}
   }
 
@@ -258,7 +262,7 @@ public struct Com_Apple_Container_Build_V1_ClientStream: @unchecked Sendable {
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   /// The packet type.
-  public enum OneOf_PacketType: Equatable, Sendable {
+  public nonisolated enum OneOf_PacketType: Equatable, Sendable {
     case signal(Com_Apple_Container_Build_V1_Signal)
     case command(Com_Apple_Container_Build_V1_Run)
     case buildTransfer(Com_Apple_Container_Build_V1_BuildTransfer)
@@ -271,7 +275,7 @@ public struct Com_Apple_Container_Build_V1_ClientStream: @unchecked Sendable {
   fileprivate var _storage = _StorageClass.defaultInstance
 }
 
-public struct Com_Apple_Container_Build_V1_Signal: Sendable {
+public nonisolated struct Com_Apple_Container_Build_V1_Signal: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -285,7 +289,7 @@ public struct Com_Apple_Container_Build_V1_Signal: Sendable {
   public init() {}
 }
 
-public struct Com_Apple_Container_Build_V1_Run: Sendable {
+public nonisolated struct Com_Apple_Container_Build_V1_Run: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -301,7 +305,7 @@ public struct Com_Apple_Container_Build_V1_Run: Sendable {
   public init() {}
 }
 
-public struct Com_Apple_Container_Build_V1_RunComplete: Sendable {
+public nonisolated struct Com_Apple_Container_Build_V1_RunComplete: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -314,7 +318,7 @@ public struct Com_Apple_Container_Build_V1_RunComplete: Sendable {
   public init() {}
 }
 
-public struct Com_Apple_Container_Build_V1_BuildTransfer: @unchecked Sendable {
+public nonisolated struct Com_Apple_Container_Build_V1_BuildTransfer: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -328,21 +332,21 @@ public struct Com_Apple_Container_Build_V1_BuildTransfer: @unchecked Sendable {
 
   /// The absolute path to the source from the server perspective.
   public var source: String {
-    get {return _source ?? String()}
+    get {_source ?? String()}
     set {_source = newValue}
   }
   /// Returns true if `source` has been explicitly set.
-  public var hasSource: Bool {return self._source != nil}
+  public var hasSource: Bool {self._source != nil}
   /// Clears the value of `source`. Subsequent reads from it will return its default value.
   public mutating func clearSource() {self._source = nil}
 
   /// The absolute path for the destination from the server perspective.
   public var destination: String {
-    get {return _destination ?? String()}
+    get {_destination ?? String()}
     set {_destination = newValue}
   }
   /// Returns true if `destination` has been explicitly set.
-  public var hasDestination: Bool {return self._destination != nil}
+  public var hasDestination: Bool {self._destination != nil}
   /// Clears the value of `destination`. Subsequent reads from it will return its default value.
   public mutating func clearDestination() {self._destination = nil}
 
@@ -366,7 +370,7 @@ public struct Com_Apple_Container_Build_V1_BuildTransfer: @unchecked Sendable {
   fileprivate var _destination: String? = nil
 }
 
-public struct Com_Apple_Container_Build_V1_ImageTransfer: @unchecked Sendable {
+public nonisolated struct Com_Apple_Container_Build_V1_ImageTransfer: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -383,11 +387,11 @@ public struct Com_Apple_Container_Build_V1_ImageTransfer: @unchecked Sendable {
 
   /// The descriptor for the image content.
   public var descriptor: Com_Apple_Container_Build_V1_Descriptor {
-    get {return _descriptor ?? Com_Apple_Container_Build_V1_Descriptor()}
+    get {_descriptor ?? Com_Apple_Container_Build_V1_Descriptor()}
     set {_descriptor = newValue}
   }
   /// Returns true if `descriptor` has been explicitly set.
-  public var hasDescriptor: Bool {return self._descriptor != nil}
+  public var hasDescriptor: Bool {self._descriptor != nil}
   /// Clears the value of `descriptor`. Subsequent reads from it will return its default value.
   public mutating func clearDescriptor() {self._descriptor = nil}
 
@@ -407,14 +411,14 @@ public struct Com_Apple_Container_Build_V1_ImageTransfer: @unchecked Sendable {
   fileprivate var _descriptor: Com_Apple_Container_Build_V1_Descriptor? = nil
 }
 
-public struct Com_Apple_Container_Build_V1_ServerStream: @unchecked Sendable {
+public nonisolated struct Com_Apple_Container_Build_V1_ServerStream: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   /// A unique ID for the build.
   public var buildID: String {
-    get {return _storage._buildID}
+    get {_storage._buildID}
     set {_uniqueStorage()._buildID = newValue}
   }
 
@@ -467,7 +471,7 @@ public struct Com_Apple_Container_Build_V1_ServerStream: @unchecked Sendable {
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   /// The packet type.
-  public enum OneOf_PacketType: Equatable, Sendable {
+  public nonisolated enum OneOf_PacketType: Equatable, Sendable {
     case io(Com_Apple_Container_Build_V1_IO)
     case buildError(Com_Apple_Container_Build_V1_BuildError)
     case commandComplete(Com_Apple_Container_Build_V1_RunComplete)
@@ -481,7 +485,7 @@ public struct Com_Apple_Container_Build_V1_ServerStream: @unchecked Sendable {
   fileprivate var _storage = _StorageClass.defaultInstance
 }
 
-public struct Com_Apple_Container_Build_V1_IO: @unchecked Sendable {
+public nonisolated struct Com_Apple_Container_Build_V1_IO: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -497,7 +501,7 @@ public struct Com_Apple_Container_Build_V1_IO: @unchecked Sendable {
   public init() {}
 }
 
-public struct Com_Apple_Container_Build_V1_BuildError: Sendable {
+public nonisolated struct Com_Apple_Container_Build_V1_BuildError: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -514,7 +518,7 @@ public struct Com_Apple_Container_Build_V1_BuildError: Sendable {
 }
 
 /// OCI Platform metadata.
-public struct Com_Apple_Container_Build_V1_Platform: Sendable {
+public nonisolated struct Com_Apple_Container_Build_V1_Platform: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -535,7 +539,7 @@ public struct Com_Apple_Container_Build_V1_Platform: Sendable {
 }
 
 /// OCI Descriptor metadata.
-public struct Com_Apple_Container_Build_V1_Descriptor: Sendable {
+public nonisolated struct Com_Apple_Container_Build_V1_Descriptor: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -551,11 +555,11 @@ public struct Com_Apple_Container_Build_V1_Descriptor: Sendable {
   public var annotations: Dictionary<String,String> = [:]
 
   public var platform: Com_Apple_Container_Build_V1_Platform {
-    get {return _platform ?? Com_Apple_Container_Build_V1_Platform()}
+    get {_platform ?? Com_Apple_Container_Build_V1_Platform()}
     set {_platform = newValue}
   }
   /// Returns true if `platform` has been explicitly set.
-  public var hasPlatform: Bool {return self._platform != nil}
+  public var hasPlatform: Bool {self._platform != nil}
   /// Clears the value of `platform`. Subsequent reads from it will return its default value.
   public mutating func clearPlatform() {self._platform = nil}
 
@@ -568,31 +572,21 @@ public struct Com_Apple_Container_Build_V1_Descriptor: Sendable {
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
 
-fileprivate let _protobuf_package = "com.apple.container.build.v1"
+fileprivate nonisolated let _protobuf_package = "com.apple.container.build.v1"
 
-extension Com_Apple_Container_Build_V1_TransferDirection: SwiftProtobuf._ProtoNameProviding {
-  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
-    0: .same(proto: "INTO"),
-    1: .same(proto: "OUTOF"),
-  ]
+nonisolated extension Com_Apple_Container_Build_V1_TransferDirection: SwiftProtobuf._ProtoNameProviding {
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0INTO\0\u{1}OUTOF\0")
 }
 
-extension Com_Apple_Container_Build_V1_Stdio: SwiftProtobuf._ProtoNameProviding {
-  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
-    0: .same(proto: "STDIN"),
-    1: .same(proto: "STDOUT"),
-    2: .same(proto: "STDERR"),
-  ]
+nonisolated extension Com_Apple_Container_Build_V1_Stdio: SwiftProtobuf._ProtoNameProviding {
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0STDIN\0\u{1}STDOUT\0\u{1}STDERR\0")
 }
 
-extension Com_Apple_Container_Build_V1_BuildErrorType: SwiftProtobuf._ProtoNameProviding {
-  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
-    0: .same(proto: "BUILD_FAILED"),
-    1: .same(proto: "INTERNAL"),
-  ]
+nonisolated extension Com_Apple_Container_Build_V1_BuildErrorType: SwiftProtobuf._ProtoNameProviding {
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0BUILD_FAILED\0\u{1}INTERNAL\0")
 }
 
-extension Com_Apple_Container_Build_V1_InfoRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Com_Apple_Container_Build_V1_InfoRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".InfoRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap()
 
@@ -611,7 +605,7 @@ extension Com_Apple_Container_Build_V1_InfoRequest: SwiftProtobuf.Message, Swift
   }
 }
 
-extension Com_Apple_Container_Build_V1_InfoResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Com_Apple_Container_Build_V1_InfoResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".InfoResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap()
 
@@ -630,15 +624,9 @@ extension Com_Apple_Container_Build_V1_InfoResponse: SwiftProtobuf.Message, Swif
   }
 }
 
-extension Com_Apple_Container_Build_V1_CreateBuildRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Com_Apple_Container_Build_V1_CreateBuildRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".CreateBuildRequest"
-  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
-    1: .standard(proto: "stage_name"),
-    2: .same(proto: "tag"),
-    3: .same(proto: "metadata"),
-    4: .standard(proto: "build_args"),
-    5: .same(proto: "debug"),
-  ]
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}stage_name\0\u{1}tag\0\u{1}metadata\0\u{3}build_args\0\u{1}debug\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -686,12 +674,9 @@ extension Com_Apple_Container_Build_V1_CreateBuildRequest: SwiftProtobuf.Message
   }
 }
 
-extension Com_Apple_Container_Build_V1_CreateBuildResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Com_Apple_Container_Build_V1_CreateBuildResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".CreateBuildResponse"
-  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
-    1: .standard(proto: "build_id"),
-    2: .same(proto: "metadata"),
-  ]
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}build_id\0\u{1}metadata\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -724,15 +709,9 @@ extension Com_Apple_Container_Build_V1_CreateBuildResponse: SwiftProtobuf.Messag
   }
 }
 
-extension Com_Apple_Container_Build_V1_ClientStream: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Com_Apple_Container_Build_V1_ClientStream: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ClientStream"
-  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
-    1: .standard(proto: "build_id"),
-    2: .same(proto: "signal"),
-    3: .same(proto: "command"),
-    4: .standard(proto: "build_transfer"),
-    5: .standard(proto: "image_transfer"),
-  ]
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}build_id\0\u{1}signal\0\u{1}command\0\u{3}build_transfer\0\u{3}image_transfer\0")
 
   fileprivate class _StorageClass {
     var _buildID: String = String()
@@ -874,11 +853,9 @@ extension Com_Apple_Container_Build_V1_ClientStream: SwiftProtobuf.Message, Swif
   }
 }
 
-extension Com_Apple_Container_Build_V1_Signal: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Com_Apple_Container_Build_V1_Signal: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Signal"
-  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
-    1: .same(proto: "signal"),
-  ]
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}signal\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -906,12 +883,9 @@ extension Com_Apple_Container_Build_V1_Signal: SwiftProtobuf.Message, SwiftProto
   }
 }
 
-extension Com_Apple_Container_Build_V1_Run: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Com_Apple_Container_Build_V1_Run: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Run"
-  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
-    1: .same(proto: "id"),
-    2: .same(proto: "command"),
-  ]
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{1}command\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -944,11 +918,9 @@ extension Com_Apple_Container_Build_V1_Run: SwiftProtobuf.Message, SwiftProtobuf
   }
 }
 
-extension Com_Apple_Container_Build_V1_RunComplete: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Com_Apple_Container_Build_V1_RunComplete: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".RunComplete"
-  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
-    1: .same(proto: "id"),
-  ]
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -976,18 +948,9 @@ extension Com_Apple_Container_Build_V1_RunComplete: SwiftProtobuf.Message, Swift
   }
 }
 
-extension Com_Apple_Container_Build_V1_BuildTransfer: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Com_Apple_Container_Build_V1_BuildTransfer: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".BuildTransfer"
-  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
-    1: .same(proto: "id"),
-    2: .same(proto: "direction"),
-    3: .same(proto: "source"),
-    4: .same(proto: "destination"),
-    5: .same(proto: "data"),
-    6: .same(proto: "complete"),
-    7: .standard(proto: "is_directory"),
-    8: .same(proto: "metadata"),
-  ]
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{1}direction\0\u{1}source\0\u{1}destination\0\u{1}data\0\u{1}complete\0\u{3}is_directory\0\u{1}metadata\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1054,17 +1017,9 @@ extension Com_Apple_Container_Build_V1_BuildTransfer: SwiftProtobuf.Message, Swi
   }
 }
 
-extension Com_Apple_Container_Build_V1_ImageTransfer: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Com_Apple_Container_Build_V1_ImageTransfer: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ImageTransfer"
-  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
-    1: .same(proto: "id"),
-    2: .same(proto: "direction"),
-    3: .same(proto: "tag"),
-    4: .same(proto: "descriptor"),
-    5: .same(proto: "data"),
-    6: .same(proto: "complete"),
-    7: .same(proto: "metadata"),
-  ]
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{1}direction\0\u{1}tag\0\u{1}descriptor\0\u{1}data\0\u{1}complete\0\u{1}metadata\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1126,16 +1081,9 @@ extension Com_Apple_Container_Build_V1_ImageTransfer: SwiftProtobuf.Message, Swi
   }
 }
 
-extension Com_Apple_Container_Build_V1_ServerStream: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Com_Apple_Container_Build_V1_ServerStream: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ServerStream"
-  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
-    1: .standard(proto: "build_id"),
-    2: .same(proto: "io"),
-    3: .standard(proto: "build_error"),
-    4: .standard(proto: "command_complete"),
-    5: .standard(proto: "build_transfer"),
-    6: .standard(proto: "image_transfer"),
-  ]
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}build_id\0\u{1}io\0\u{3}build_error\0\u{3}command_complete\0\u{3}build_transfer\0\u{3}image_transfer\0")
 
   fileprivate class _StorageClass {
     var _buildID: String = String()
@@ -1294,12 +1242,9 @@ extension Com_Apple_Container_Build_V1_ServerStream: SwiftProtobuf.Message, Swif
   }
 }
 
-extension Com_Apple_Container_Build_V1_IO: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Com_Apple_Container_Build_V1_IO: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".IO"
-  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
-    1: .same(proto: "type"),
-    2: .same(proto: "data"),
-  ]
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}type\0\u{1}data\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1332,12 +1277,9 @@ extension Com_Apple_Container_Build_V1_IO: SwiftProtobuf.Message, SwiftProtobuf.
   }
 }
 
-extension Com_Apple_Container_Build_V1_BuildError: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Com_Apple_Container_Build_V1_BuildError: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".BuildError"
-  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
-    1: .same(proto: "type"),
-    2: .same(proto: "message"),
-  ]
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}type\0\u{1}message\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1370,15 +1312,9 @@ extension Com_Apple_Container_Build_V1_BuildError: SwiftProtobuf.Message, SwiftP
   }
 }
 
-extension Com_Apple_Container_Build_V1_Platform: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Com_Apple_Container_Build_V1_Platform: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Platform"
-  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
-    1: .same(proto: "architecture"),
-    2: .same(proto: "os"),
-    3: .standard(proto: "os_version"),
-    4: .standard(proto: "os_features"),
-    5: .same(proto: "variant"),
-  ]
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}architecture\0\u{1}os\0\u{3}os_version\0\u{3}os_features\0\u{1}variant\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1426,16 +1362,9 @@ extension Com_Apple_Container_Build_V1_Platform: SwiftProtobuf.Message, SwiftPro
   }
 }
 
-extension Com_Apple_Container_Build_V1_Descriptor: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Com_Apple_Container_Build_V1_Descriptor: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Descriptor"
-  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
-    1: .standard(proto: "media_type"),
-    2: .same(proto: "digest"),
-    3: .same(proto: "size"),
-    4: .same(proto: "urls"),
-    5: .same(proto: "annotations"),
-    6: .same(proto: "platform"),
-  ]
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}media_type\0\u{1}digest\0\u{1}size\0\u{1}urls\0\u{1}annotations\0\u{1}platform\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {

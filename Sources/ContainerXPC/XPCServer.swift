@@ -1,5 +1,5 @@
 //===----------------------------------------------------------------------===//
-// Copyright © 2025 Apple Inc. and the container project authors. All rights reserved.
+// Copyright © 2025-2026 Apple Inc. and the container project authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
 //===----------------------------------------------------------------------===//
 
 #if os(macOS)
+import CAuditToken
 import ContainerizationError
 import Foundation
 import Logging
@@ -22,10 +23,17 @@ import os
 import Synchronization
 
 public struct XPCServer: Sendable {
-    public typealias RouteHandler = @Sendable (XPCMessage) async throws -> XPCMessage
+    public typealias RouteHandler = @Sendable (XPCMessage, XPCServerSession) async throws -> XPCMessage
+
+    /// Wraps a session-unaware handler for use in a route table.
+    public static func route(
+        _ fn: @Sendable @escaping (XPCMessage) async throws -> XPCMessage
+    ) -> RouteHandler {
+        { message, _ in try await fn(message) }
+    }
 
     private let routes: [String: RouteHandler]
-    // Access to `connection` is protected by a lock
+    // Access to `connection` is protected by a lock.
     private nonisolated(unsafe) let connection: xpc_connection_t
     private let lock = NSLock()
 
@@ -35,8 +43,15 @@ public struct XPCServer: Sendable {
         let connection = xpc_connection_create_mach_service(
             identifier,
             nil,
-            UInt64(XPC_CONNECTION_MACH_SERVICE_LISTENER))
+            UInt64(XPC_CONNECTION_MACH_SERVICE_LISTENER)
+        )
 
+        self.routes = routes
+        self.connection = connection
+        self.log = log
+    }
+
+    public init(connection: xpc_connection_t, routes: [String: RouteHandler], log: Logging.Logger) {
         self.routes = routes
         self.connection = connection
         self.log = log
@@ -71,6 +86,7 @@ public struct XPCServer: Sendable {
         lock.withLock {
             xpc_connection_activate(self.connection)
         }
+
         try await withThrowingDiscardingTaskGroup { group in
             for await conn in connections {
                 // `conn` isn't used concurrently.
@@ -91,6 +107,7 @@ public struct XPCServer: Sendable {
 
     func handleClientConnection(connection: xpc_connection_t) async throws {
         let replySent = Mutex(false)
+        let session = XPCServerSession()
 
         let objects = AsyncStream<xpc_object_t> { cont in
             xpc_connection_set_event_handler(connection) { object in
@@ -104,9 +121,15 @@ public struct XPCServer: Sendable {
                         cont.finish()
                     }
                     if !(replySent.withLock({ $0 }) && object.connectionClosed) {
-                        // When a xpc connection is closed, the framework sends a final XPC_ERROR_CONNECTION_INVALID message.
-                        // We can ignore this if we know we have already handled the request.
-                        self.log.error("xpc client handler connection error \(object.errorDescription ?? "no description")")
+                        // When a xpc connection is closed, the framework sends
+                        // a final XPC_ERROR_CONNECTION_INVALID message.
+                        // We can ignore this if we know we have already handled
+                        // the request.
+                        self.log.error(
+                            "xpc client handler connection error",
+                            metadata: [
+                                "error": "\(object.errorDescription ?? "no description")"
+                            ])
                     }
                 default:
                     fatalError("unhandled xpc object type: \(xpc_get_type(object))")
@@ -125,7 +148,7 @@ public struct XPCServer: Sendable {
                 // `object` isn't used concurrently.
                 nonisolated(unsafe) let object = object
                 let added = group.addTaskUnlessCancelled { @Sendable in
-                    try await self.handleMessage(connection: connection, object: object)
+                    try await self.handleMessage(connection: connection, object: object, session: session)
                     replySent.withLock { $0 = true }
                 }
                 if !added {
@@ -134,32 +157,98 @@ public struct XPCServer: Sendable {
             }
             group.cancelAll()
         }
+        await session.fireDisconnect()
     }
 
-    func handleMessage(connection: xpc_connection_t, object: xpc_object_t) async throws {
+    func handleMessage(connection: xpc_connection_t, object: xpc_object_t, session: XPCServerSession) async throws {
+        // All requests are dictionary-valued.
+        guard xpc_get_type(object) == XPC_TYPE_DICTIONARY else {
+            log.error("invalid request - not a dictionary")
+            Self.replyWithError(
+                connection: connection,
+                object: object,
+                err: ContainerizationError(.invalidArgument, message: "invalid request")
+            )
+            return
+        }
+
+        // Ensure that the client has our EUID
+        var token = audit_token_t()
+        xpc_dictionary_get_audit_token(object, &token)
+        let serverEuid = geteuid()
+        let clientEuid = audit_token_to_euid(token)
+        guard clientEuid == serverEuid else {
+            log.error(
+                "unauthorized request - uid mismatch",
+                metadata: [
+                    "server_euid": "\(serverEuid)",
+                    "client_euid": "\(clientEuid)",
+                ])
+            Self.replyWithError(
+                connection: connection,
+                object: object,
+                err: ContainerizationError(.invalidState, message: "unauthorized request")
+            )
+            return
+        }
+
         guard let route = object.route else {
-            log.error("empty route")
+            log.error("invalid request - empty route")
+            Self.replyWithError(
+                connection: connection,
+                object: object,
+                err: ContainerizationError(.invalidArgument, message: "invalid request")
+            )
             return
         }
 
         if let handler = routes[route] {
-            let message = XPCMessage(object: object)
             do {
-                let response = try await handler(message)
+                let message = XPCMessage(object: object)
+                let response = try await handler(message, session)
                 xpc_connection_send_message(connection, response.underlying)
             } catch let error as ContainerizationError {
-                let reply = message.reply()
-                log.error("handler for \(route) threw error \(error)")
-                reply.set(error: error)
-                xpc_connection_send_message(connection, reply.underlying)
+                log.error(
+                    "route handler threw an error",
+                    metadata: [
+                        "route": "\(route)",
+                        "error": "\(error)",
+                    ])
+                Self.replyWithError(
+                    connection: connection,
+                    object: object,
+                    err: error
+                )
             } catch {
+                log.error(
+                    "route handler threw an error",
+                    metadata: [
+                        "route": "\(route)",
+                        "error": "\(error)",
+                    ])
+                let message = XPCMessage(object: object)
                 let reply = message.reply()
-                log.error("handler for \(route) threw error \(error)")
-                let err = ContainerizationError(.unknown, message: String(describing: error))
-                reply.set(error: err)
+
+                // Check if this is a VolumeError by looking at the error description
+                let errorMessage = error.localizedDescription
+                let errorTypeString = String(describing: type(of: error))
+                if errorTypeString.contains("VolumeError") || errorMessage.contains("Volume") {
+                    let err = ContainerizationError(.invalidArgument, message: errorMessage)
+                    reply.set(error: err)
+                } else {
+                    let err = ContainerizationError(.unknown, message: String(describing: error))
+                    reply.set(error: err)
+                }
                 xpc_connection_send_message(connection, reply.underlying)
             }
         }
+    }
+
+    private static func replyWithError(connection: xpc_connection_t, object: xpc_object_t, err: ContainerizationError) {
+        let message = XPCMessage(object: object)
+        let reply = message.reply()
+        reply.set(error: err)
+        xpc_connection_send_message(connection, reply.underlying)
     }
 }
 
@@ -173,12 +262,12 @@ extension xpc_object_t {
     }
 
     var connectionError: Bool {
-        precondition(isError, "Not an error")
+        precondition(isError, "not an error")
         return xpc_equal(self, XPC_ERROR_CONNECTION_INVALID) || xpc_equal(self, XPC_ERROR_CONNECTION_INTERRUPTED)
     }
 
     var connectionClosed: Bool {
-        precondition(isError, "Not an error")
+        precondition(isError, "not an error")
         return xpc_equal(self, XPC_ERROR_CONNECTION_INVALID)
     }
 
@@ -187,7 +276,7 @@ extension xpc_object_t {
     }
 
     var errorDescription: String? {
-        precondition(isError, "Not an error")
+        precondition(isError, "not an error")
         let cstring = xpc_dictionary_get_string(self, XPC_ERROR_KEY_DESCRIPTION)
         guard let cstring else {
             return nil

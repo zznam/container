@@ -1,5 +1,5 @@
 //===----------------------------------------------------------------------===//
-// Copyright © 2025 Apple Inc. and the container project authors. All rights reserved.
+// Copyright © 2025-2026 Apple Inc. and the container project authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,8 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //===----------------------------------------------------------------------===//
-
-import DNS
 
 /// Handler that returns NXDOMAIN for all hostnames.
 public struct NxDomainResolver: DNSHandler {
@@ -35,29 +33,11 @@ public struct NxDomainResolver: DNSHandler {
                 questions: query.questions,
                 answers: []
             )
-        case ResourceRecordType.nameServer,
-            ResourceRecordType.alias,
-            ResourceRecordType.startOfAuthority,
-            ResourceRecordType.pointer,
-            ResourceRecordType.mailExchange,
-            ResourceRecordType.text,
-            ResourceRecordType.host6,
-            ResourceRecordType.service,
-            ResourceRecordType.incrementalZoneTransfer,
-            ResourceRecordType.standardZoneTransfer,
-            ResourceRecordType.all:
-            return Message(
-                id: query.id,
-                type: .response,
-                returnCode: .notImplemented,
-                questions: query.questions,
-                answers: []
-            )
         default:
             return Message(
                 id: query.id,
                 type: .response,
-                returnCode: .formatError,
+                returnCode: .notImplemented,
                 questions: query.questions,
                 answers: []
             )
